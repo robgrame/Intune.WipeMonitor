@@ -127,8 +127,16 @@ public class ActiveDirectoryService
 
         if (!string.IsNullOrEmpty(_settings.ActiveDirectory.Username))
         {
-            var credential = new NetworkCredential(
-                _settings.ActiveDirectory.Username, _settings.ActiveDirectory.Password);
+            // Supporta formato DOMAIN\user e user@domain
+            var username = _settings.ActiveDirectory.Username;
+            string? domain = null;
+            if (username.Contains('\\'))
+            {
+                var parts = username.Split('\\', 2);
+                domain = parts[0];
+                username = parts[1];
+            }
+            var credential = new NetworkCredential(username, _settings.ActiveDirectory.Password, domain ?? "");
             connection = new LdapConnection(identifier, credential);
         }
         else
