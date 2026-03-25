@@ -65,7 +65,17 @@ try
         {
             var settings = builder.Configuration
                 .GetSection(AgentSettings.SectionName).Get<AgentSettings>();
-            var handler = new HttpClientHandler { UseDefaultCredentials = true };
+            var handler = new HttpClientHandler();
+            // Usa credenziali di dominio esplicite se configurate, altrimenti default
+            if (!string.IsNullOrEmpty(settings?.Sccm.Username))
+            {
+                handler.Credentials = new System.Net.NetworkCredential(
+                    settings.Sccm.Username, settings.Sccm.Password);
+            }
+            else
+            {
+                handler.UseDefaultCredentials = true;
+            }
             if (settings?.Sccm.IgnoreSslErrors == true)
             {
                 handler.ServerCertificateCustomValidationCallback =

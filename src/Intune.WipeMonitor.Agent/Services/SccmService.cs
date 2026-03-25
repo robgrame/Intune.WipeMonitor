@@ -130,12 +130,8 @@ public class SccmService
 
     private void ConfigureAuth(HttpRequestMessage request)
     {
-        if (!string.IsNullOrEmpty(_settings.Sccm.Username))
-        {
-            var credentials = Convert.ToBase64String(
-                Encoding.ASCII.GetBytes($"{_settings.Sccm.Username}:{_settings.Sccm.Password}"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-        }
+        // Le credenziali vengono gestite dal HttpClientHandler configurato nel DI.
+        // Se serve un override per singola request, aggiungere qui.
     }
 }
 
