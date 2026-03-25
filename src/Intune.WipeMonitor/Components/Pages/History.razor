@@ -216,8 +216,19 @@ else
     {
         StepResult.Success => "bg-success",
         StepResult.Failed => "bg-danger",
-        StepResult.NotFound => "bg-secondary",
+        StepResult.NotFound => "bg-info",
         StepResult.Skipped => "bg-dark",
-        _ => "bg-info"
+        StepResult.SidMismatch => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStepLabel(StepResult result) => result switch
+    {
+        StepResult.Success => "✅ Rimosso",
+        StepResult.Failed => "❌ Fallito",
+        StepResult.NotFound => "ℹ️ Già rimosso",
+        StepResult.Skipped => "⏭️ Saltato",
+        StepResult.SidMismatch => "⚠️ SID Mismatch",
+        _ => result.ToString()
     };
 }

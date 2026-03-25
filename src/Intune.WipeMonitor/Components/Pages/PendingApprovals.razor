@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject CleanupOrchestrator Orchestrator
+@inject AuthenticationStateProvider AuthState
 
 <PageTitle>Approvazioni — Wipe Monitor</PageTitle>
 
@@ -129,10 +130,10 @@ else
                                 {
                                     <li>
                                         <span class="badge @GetStepBadgeClass(step.Result)">@step.Target</span>
-                                        @step.Result
+                                        @GetStepLabel(step.Result)
                                         @if (!string.IsNullOrEmpty(step.ErrorMessage))
                                         {
-                                            <small class="text-danger">— @step.ErrorMessage</small>
+                                            <small class="text-muted">— @step.ErrorMessage</small>
                                         }
                                     </li>
                                 }
@@ -201,8 +202,9 @@ else
 
         try
         {
+            var userName = await GetCurrentUserAsync();
             notes.TryGetValue(wipeActionId, out var note);
-            var success = await Orchestrator.ApproveCleanupAsync(wipeActionId, "operator", note);
+            var success = await Orchestrator.ApproveCleanupAsync(wipeActionId, userName, note);
 
             statusMessage = success
                 ? $"Cleanup approvato ed eseguito con successo."
@@ -228,8 +230,9 @@ else
 
         try
         {
+            var userName = await GetCurrentUserAsync();
             notes.TryGetValue(wipeActionId, out var reason);
-            await Orchestrator.SkipCleanupAsync(wipeActionId, "operator", reason);
+            await Orchestrator.SkipCleanupAsync(wipeActionId, userName, reason);
             statusMessage = "Device contrassegnato come saltato.";
             statusAlertClass = "alert-info";
         }
@@ -264,8 +267,25 @@ else
     {
         StepResult.Success => "bg-success",
         StepResult.Failed => "bg-danger",
-        StepResult.NotFound => "bg-secondary",
+        StepResult.NotFound => "bg-info",
         StepResult.Skipped => "bg-dark",
-        _ => "bg-info"
+        StepResult.SidMismatch => "bg-warning text-dark",
+        _ => "bg-secondary"
     };
+
+    private static string GetStepLabel(StepResult result) => result switch
+    {
+        StepResult.Success => "✅ Rimosso",
+        StepResult.Failed => "❌ Fallito",
+        StepResult.NotFound => "ℹ️ Già rimosso",
+        StepResult.Skipped => "⏭️ Saltato",
+        StepResult.SidMismatch => "⚠️ SID Mismatch",
+        _ => result.ToString()
+    };
+
+    private async Task<string> GetCurrentUserAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        return authState.User.Identity?.Name ?? "unknown";
+    }
 }
