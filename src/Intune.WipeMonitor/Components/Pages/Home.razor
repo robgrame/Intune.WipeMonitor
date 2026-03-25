@@ -1,0 +1,216 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject WipeMonitorBackgroundService BackgroundService
+
+<PageTitle>Dashboard — Wipe Monitor</PageTitle>
+
+<h1 class="mb-4">📊 Dashboard</h1>
+
+@* Service Status *@
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card @(BackgroundService.IsRunning ? "border-success" : "border-warning")">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Polling Service:</strong>
+                    @if (BackgroundService.IsRunning)
+                    {
+                        <span class="badge bg-success ms-2">Attivo</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning ms-2">Inattivo</span>
+                    }
+                    @if (BackgroundService.LastPollTime.HasValue)
+                    {
+                        <span class="text-muted ms-3">Ultimo polling: @BackgroundService.LastPollTime.Value.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                    }
+                    @if (!string.IsNullOrEmpty(BackgroundService.LastError))
+                    {
+                        <span class="text-danger ms-3">⚠ @BackgroundService.LastError</span>
+                    }
+                </div>
+                <button class="btn btn-sm btn-outline-primary" @onclick="RefreshAsync">🔄 Aggiorna</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Agent On-Prem Status *@
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><strong>🖧 Agent On-Premises</strong></div>
+            <div class="card-body">
+                @if (!CleanupHub.ConnectedAgents.Any())
+                {
+                    <span class="badge bg-danger">Nessun agent connesso</span>
+                    <small class="text-muted ms-2">L'agent on-prem deve essere avviato per eseguire il cleanup su AD e SCCM.</small>
+                }
+                else
+                {
+                    @foreach (var agent in CleanupHub.ConnectedAgents.Values)
+                    {
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge @(agent.IsAlive ? "bg-success" : "bg-warning")">
+                                @(agent.IsAlive ? "Online" : "Non risponde")
+                            </span>
+                            <strong>@agent.AgentId</strong>
+                            <span class="text-muted">(@agent.MachineName, v@agent.Version)</span>
+                            <span class="text-muted">
+                                Connesso: @agent.ConnectedAt.LocalDateTime.ToString("HH:mm:ss")
+                                | Heartbeat: @agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")
+                            </span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Summary Cards *@
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card text-center border-info">
+            <div class="card-body">
+                <h2 class="card-title text-info">@wipePendingCount</h2>
+                <p class="card-text">Wipe in Corso</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card text-center border-warning">
+            <div class="card-body">
+                <h2 class="card-title text-warning">@pendingApprovalCount</h2>
+                <p class="card-text">In Attesa Approvazione</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h2 class="card-title text-success">@completedCount</h2>
+                <p class="card-text">Cleanup Completati</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <h2 class="card-title text-danger">@failedCount</h2>
+                <p class="card-text">Falliti</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Recent Activity *@
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">📋 Attività Recente</h5>
+    </div>
+    <div class="card-body">
+        @if (recentRecords is null)
+        {
+            <p class="text-muted">Caricamento...</p>
+        }
+        else if (recentRecords.Count == 0)
+        {
+            <p class="text-muted">Nessuna azione di wipe rilevata. Il servizio di polling recupererà i dati da Intune.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Owner</th>
+                            <th>Wipe richiesto da</th>
+                            <th>Data Richiesta</th>
+                            <th>Stato Wipe</th>
+                            <th>Stato Cleanup</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var record in recentRecords)
+                        {
+                            <tr>
+                                <td><strong>@record.DeviceDisplayName</strong></td>
+                                <td>@record.DeviceOwner</td>
+                                <td>@record.InitiatedBy</td>
+                                <td>@record.WipeRequestedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    @if (record.WipeActionState == "done")
+                                    {
+                                        <span class="badge bg-success">Completato</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info">@record.WipeActionState</span>
+                                    }
+                                </td>
+                                <td>
+                                    @switch (record.Status)
+                                    {
+                                        case CleanupStatus.WipePending:
+                                            <span class="badge bg-secondary">Wipe in corso</span>
+                                            break;
+                                        case CleanupStatus.PendingApproval:
+                                            <span class="badge bg-warning text-dark">In attesa</span>
+                                            break;
+                                        case CleanupStatus.CleanupInProgress:
+                                            <span class="badge bg-primary">In esecuzione</span>
+                                            break;
+                                        case CleanupStatus.Completed:
+                                            <span class="badge bg-success">Completato</span>
+                                            break;
+                                        case CleanupStatus.Failed:
+                                            <span class="badge bg-danger">Fallito</span>
+                                            break;
+                                        case CleanupStatus.Skipped:
+                                            <span class="badge bg-dark">Saltato</span>
+                                            break;
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private int wipePendingCount;
+    private int pendingApprovalCount;
+    private int completedCount;
+    private int failedCount;
+    private List<DeviceCleanupRecord>? recentRecords;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        wipePendingCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.WipePending);
+        pendingApprovalCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.PendingApproval);
+        completedCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.Completed);
+        failedCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.Failed);
+
+        recentRecords = await Db.DeviceCleanupRecords
+            .OrderByDescending(r => r.LastUpdatedAt)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadDataAsync();
+    }
+}

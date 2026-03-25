@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Intune.WipeMonitor.Agent/Intune.WipeMonitor.Agent.csproj" />
+    <Project Path="src/Intune.WipeMonitor.Shared/Intune.WipeMonitor.Shared.csproj" />
+    <Project Path="src/Intune.WipeMonitor/Intune.WipeMonitor.csproj" />
+  </Folder>
+</Solution>

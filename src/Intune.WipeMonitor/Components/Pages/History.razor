@@ -1,0 +1,223 @@
+@page "/history"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+
+<PageTitle>Storico — Wipe Monitor</PageTitle>
+
+<h1 class="mb-4">📜 Storico Operazioni</h1>
+
+@* Filtri *@
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Cerca device:</label>
+                <input type="text" class="form-control" @bind="searchTerm" @bind:event="oninput"
+                       placeholder="Nome device..." />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Stato:</label>
+                <select class="form-select" @bind="filterStatus">
+                    <option value="">Tutti</option>
+                    <option value="@CleanupStatus.WipePending">Wipe in corso</option>
+                    <option value="@CleanupStatus.PendingApproval">In attesa approvazione</option>
+                    <option value="@CleanupStatus.Completed">Completati</option>
+                    <option value="@CleanupStatus.Failed">Falliti</option>
+                    <option value="@CleanupStatus.Skipped">Saltati</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary" @onclick="ApplyFiltersAsync">🔍 Filtra</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (records is null)
+{
+    <p class="text-muted">Caricamento...</p>
+}
+else if (records.Count == 0)
+{
+    <div class="alert alert-info">Nessun record trovato con i filtri selezionati.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>Device</th>
+                    <th>Owner</th>
+                    <th>Richiesto da</th>
+                    <th>Data Wipe</th>
+                    <th>Stato Wipe</th>
+                    <th>Stato Cleanup</th>
+                    <th>Approvato da</th>
+                    <th>Completato il</th>
+                    <th>Dettagli</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in records)
+                {
+                    <tr>
+                        <td><strong>@record.DeviceDisplayName</strong></td>
+                        <td>@record.DeviceOwner</td>
+                        <td>@record.InitiatedBy</td>
+                        <td>@record.WipeRequestedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            @if (record.WipeActionState == "done")
+                            {
+                                <span class="badge bg-success">done</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-info">@record.WipeActionState</span>
+                            }
+                        </td>
+                        <td>@GetStatusBadge(record.Status)</td>
+                        <td>@(record.ApprovedBy ?? "—")</td>
+                        <td>
+                            @if (record.CleanupCompletedAt.HasValue)
+                            {
+                                @record.CleanupCompletedAt.Value.LocalDateTime.ToString("dd/MM/yyyy HH:mm")
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => ToggleDetails(record.WipeActionId)">
+                                @(expandedId == record.WipeActionId ? "▲ Nascondi" : "▼ Dettagli")
+                            </button>
+                        </td>
+                    </tr>
+                    @if (expandedId == record.WipeActionId)
+                    {
+                        <tr>
+                            <td colspan="9">
+                                <div class="p-3 bg-light">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Managed Device ID:</strong> <code>@record.ManagedDeviceId</code><br />
+                                            <strong>Wipe Action ID:</strong> <code>@record.WipeActionId</code><br />
+                                            <strong>Rilevato:</strong> @record.FirstSeenAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")<br />
+                                            @if (!string.IsNullOrEmpty(record.Notes))
+                                            {
+                                                <strong>Note:</strong> @record.Notes
+                                            }
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Step di cleanup:</strong>
+                                            @if (record.CleanupSteps.Count > 0)
+                                            {
+                                                <table class="table table-sm mt-2">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Target</th>
+                                                            <th>Risultato</th>
+                                                            <th>Data</th>
+                                                            <th>Errore</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var step in record.CleanupSteps.OrderBy(s => s.ExecutedAt))
+                                                        {
+                                                            <tr>
+                                                                <td>@step.Target</td>
+                                                                <td><span class="badge @GetStepBadgeClass(step.Result)">@step.Result</span></td>
+                                                                <td>@step.ExecutedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                                                <td>@(step.ErrorMessage ?? "—")</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            }
+                                            else
+                                            {
+                                                <p class="text-muted mt-2">Nessuno step eseguito.</p>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <p class="text-muted">Visualizzati @records.Count record</p>
+}
+
+@code {
+    private List<DeviceCleanupRecord>? records;
+    private string searchTerm = "";
+    private string filterStatus = "";
+    private string? expandedId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        var query = Db.DeviceCleanupRecords
+            .Include(r => r.CleanupSteps)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query = query.Where(r => r.DeviceDisplayName.Contains(searchTerm));
+        }
+
+        if (!string.IsNullOrEmpty(filterStatus) && Enum.TryParse<CleanupStatus>(filterStatus, out var status))
+        {
+            query = query.Where(r => r.Status == status);
+        }
+
+        records = await query
+            .OrderByDescending(r => r.WipeRequestedAt)
+            .Take(100)
+            .ToListAsync();
+    }
+
+    private void ToggleDetails(string wipeActionId)
+    {
+        expandedId = expandedId == wipeActionId ? null : wipeActionId;
+    }
+
+    private static RenderFragment GetStatusBadge(CleanupStatus status) => status switch
+    {
+        CleanupStatus.WipePending => StatusBadge("bg-secondary", "Wipe in corso"),
+        CleanupStatus.PendingApproval => StatusBadge("bg-warning text-dark", "In attesa"),
+        CleanupStatus.CleanupInProgress => StatusBadge("bg-primary", "In esecuzione"),
+        CleanupStatus.Completed => StatusBadge("bg-success", "Completato"),
+        CleanupStatus.Failed => StatusBadge("bg-danger", "Fallito"),
+        CleanupStatus.Skipped => StatusBadge("bg-dark", "Saltato"),
+        _ => StatusBadge("bg-secondary", status.ToString())
+    };
+
+    private static RenderFragment StatusBadge(string cssClass, string text) =>
+        builder =>
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", $"badge {cssClass}");
+            builder.AddContent(2, text);
+            builder.CloseElement();
+        };
+
+    private static string GetStepBadgeClass(StepResult result) => result switch
+    {
+        StepResult.Success => "bg-success",
+        StepResult.Failed => "bg-danger",
+        StepResult.NotFound => "bg-secondary",
+        StepResult.Skipped => "bg-dark",
+        _ => "bg-info"
+    };
+}

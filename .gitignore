@@ -1,0 +1,33 @@
+## .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.sln.docstates
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Build artifacts
+publish.zip
+*.zip
+
+## Logs
+logs/
+
+## SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+## Secrets (never commit)
+appsettings.Development.json
