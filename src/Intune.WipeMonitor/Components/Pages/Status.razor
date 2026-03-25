@@ -1,0 +1,72 @@
+@page "/status"
+@rendermode InteractiveServer
+@inject WipeMonitorBackgroundService BackgroundService
+
+<PageTitle>Stato Servizi — Wipe Monitor</PageTitle>
+
+<h1 class="mb-4">⚙️ Stato Servizi</h1>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card @(BackgroundService.IsRunning ? "border-success" : "border-warning")">
+            <div class="card-header"><strong>📡 Polling Service</strong></div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Stato:</dt>
+                    <dd class="col-sm-7">
+                        @if (BackgroundService.IsRunning)
+                        {
+                            <span class="badge bg-success">Attivo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">Inattivo</span>
+                        }
+                    </dd>
+                    <dt class="col-sm-5">Ultimo polling:</dt>
+                    <dd class="col-sm-7">
+                        @(BackgroundService.LastPollTime?.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss") ?? "Mai")
+                    </dd>
+                    <dt class="col-sm-5">Ultimo errore:</dt>
+                    <dd class="col-sm-7 @(!string.IsNullOrEmpty(BackgroundService.LastError) ? "text-danger" : "")">
+                        @(BackgroundService.LastError ?? "Nessuno")
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header"><strong>🖧 Agent On-Premises</strong></div>
+            <div class="card-body">
+                @if (!CleanupHub.ConnectedAgents.Any())
+                {
+                    <span class="badge bg-danger">Nessun agent connesso</span>
+                    <p class="text-muted mt-2 mb-0">L'agent on-prem deve essere avviato per eseguire il cleanup su AD e SCCM.</p>
+                }
+                else
+                {
+                    @foreach (var agent in CleanupHub.ConnectedAgents.Values)
+                    {
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Agent:</dt>
+                            <dd class="col-sm-7">
+                                <span class="badge @(agent.IsAlive ? "bg-success" : "bg-warning")">
+                                    @(agent.IsAlive ? "Online" : "Non risponde")
+                                </span>
+                                <strong class="ms-1">@agent.AgentId</strong>
+                            </dd>
+                            <dt class="col-sm-5">Machine:</dt>
+                            <dd class="col-sm-7">@agent.MachineName (v@agent.Version)</dd>
+                            <dt class="col-sm-5">Connesso da:</dt>
+                            <dd class="col-sm-7">@agent.ConnectedAt.LocalDateTime.ToString("HH:mm:ss")</dd>
+                            <dt class="col-sm-5">Heartbeat:</dt>
+                            <dd class="col-sm-7">@agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")</dd>
+                        </dl>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>

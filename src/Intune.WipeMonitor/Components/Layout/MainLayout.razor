@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@using System.Reflection
 
 <div class="page">
     <div class="sidebar">
@@ -6,13 +7,24 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
+        <div class="top-row px-4 d-flex justify-content-between align-items-center">
             <span class="text-muted">Intune Wipe Monitor — Device Lifecycle Management</span>
+            <AuthorizeView>
+                <Authorized>
+                    <span class="text-muted me-3">👤 @context.User.Identity?.Name</span>
+                    <a href="MicrosoftIdentity/Account/SignOut" class="btn btn-sm btn-outline-secondary">Sign Out</a>
+                </Authorized>
+            </AuthorizeView>
         </div>
 
         <article class="content px-4">
             @Body
         </article>
+
+        <footer class="border-top px-4 py-2 d-flex justify-content-between align-items-center text-muted small">
+            <span>v@(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0") — Made with ❤️ by IT Pro for IT Pro</span>
+            <span>Running on <img src="https://img.shields.io/badge/☁-Azure-0078D4?style=flat-square" alt="Azure" style="height:16px;vertical-align:middle;" /></span>
+        </footer>
     </main>
 </div>
 

@@ -6,6 +6,8 @@ using Intune.WipeMonitor.Models;
 using Intune.WipeMonitor.Services;
 using Intune.WipeMonitor.Shared.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 using Serilog;
 using Serilog.Events;
 
@@ -70,7 +72,21 @@ if (!string.IsNullOrEmpty(appConfigEndpoint))
 // Application Insights
 builder.Services.AddApplicationInsightsTelemetry();
 
-// Configuration binding (solo config pertinente al web app — AD e SCCM sono gestiti dall'agent on-prem)
+// Entra ID Authentication
+builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAd");
+builder.Services.AddControllersWithViews()
+    .AddMicrosoftIdentityUI();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("WipeMonitorAdmin", policy =>
+        policy.RequireRole("WipeMonitor-Admin"));
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+builder.Services.AddCascadingAuthenticationState();
+
+// Configuration binding(solo config pertinente al web app — AD e SCCM sono gestiti dall'agent on-prem)
 builder.Services.Configure<WipeMonitorSettings>(
     builder.Configuration.GetSection(WipeMonitorSettings.SectionName));
 builder.Services.Configure<GraphSettings>(
@@ -144,10 +160,13 @@ if (appConfigLoaded)
 app.UseStatusCodePagesWithRedirects("/not-found");
 app.UseHttpsRedirection();
 app.UseAntiforgery();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+app.MapControllers(); // For Microsoft Identity UI sign-in/sign-out
 
 app.MapHub<CleanupHub>("/hub/cleanup");
 
