@@ -188,12 +188,14 @@
 
     private async Task LoadDataAsync()
     {
-        wipePendingCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.WipePending);
-        pendingApprovalCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.PendingApproval);
-        completedCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.Completed);
-        failedCount = await Db.DeviceCleanupRecords.CountAsync(r => r.Status == CleanupStatus.Failed);
+        // AsNoTracking per leggere sempre dati freschi dal DB (evita cache EF)
+        wipePendingCount = await Db.DeviceCleanupRecords.AsNoTracking().CountAsync(r => r.Status == CleanupStatus.WipePending);
+        pendingApprovalCount = await Db.DeviceCleanupRecords.AsNoTracking().CountAsync(r => r.Status == CleanupStatus.PendingApproval);
+        completedCount = await Db.DeviceCleanupRecords.AsNoTracking().CountAsync(r => r.Status == CleanupStatus.Completed);
+        failedCount = await Db.DeviceCleanupRecords.AsNoTracking().CountAsync(r => r.Status == CleanupStatus.Failed);
 
         recentRecords = await Db.DeviceCleanupRecords
+            .AsNoTracking()
             .OrderByDescending(r => r.LastUpdatedAt)
             .Take(20)
             .ToListAsync();

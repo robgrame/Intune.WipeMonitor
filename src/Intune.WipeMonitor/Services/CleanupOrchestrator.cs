@@ -15,7 +15,7 @@ namespace Intune.WipeMonitor.Services;
 /// </summary>
 public class CleanupOrchestrator
 {
-    private readonly IHubContext<CleanupHub, ICleanupAgentClient> _hubContext;
+    private readonly IHubContext<CleanupHub> _hubContext;
     private readonly GraphWipeMonitorService _graphService;
     private readonly CleanupTelemetryService _telemetry;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -23,7 +23,7 @@ public class CleanupOrchestrator
     private readonly ILogger<CleanupOrchestrator> _logger;
 
     public CleanupOrchestrator(
-        IHubContext<CleanupHub, ICleanupAgentClient> hubContext,
+        IHubContext<CleanupHub> hubContext,
         GraphWipeMonitorService graphService,
         CleanupTelemetryService telemetry,
         IServiceScopeFactory scopeFactory,
@@ -71,6 +71,10 @@ public class CleanupOrchestrator
         {
             _logger.LogError("Nessun agent on-prem connesso. Impossibile eseguire cleanup per {DeviceName}",
                 record.DeviceDisplayName);
+            record.Status = CleanupStatus.Failed;
+            record.LastUpdatedAt = DateTimeOffset.UtcNow;
+            record.Notes = (record.Notes ?? "") + " [Cleanup fallito: nessun agent on-prem connesso]";
+            await db.SaveChangesAsync(cancellationToken);
             _telemetry.TrackCleanupFailed(record, "Nessun agent on-prem connesso");
             return;
         }
@@ -94,14 +98,14 @@ public class CleanupOrchestrator
         // Step 1: Active Directory (via agent on-prem)
         var adResult = await InvokeAgentStepAsync(
             activeAgent.ConnectionId, CleanupTarget.ActiveDirectory,
-            client => client.RemoveFromActiveDirectory(command));
+            nameof(ICleanupAgentClient.RemoveFromActiveDirectory), command);
         allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.ActiveDirectory, adResult, cancellationToken);
         _telemetry.TrackADDeletion(record, adResult);
 
         // Step 2: SCCM (via agent on-prem)
         var sccmResult = await InvokeAgentStepAsync(
             activeAgent.ConnectionId, CleanupTarget.SCCM,
-            client => client.RemoveFromSccm(command));
+            nameof(ICleanupAgentClient.RemoveFromSccm), command);
         allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.SCCM, sccmResult, cancellationToken);
         _telemetry.TrackSCCMDeletion(record, sccmResult);
 
@@ -130,19 +134,25 @@ public class CleanupOrchestrator
 
     /// <summary>
     /// Invoca un metodo sull'agent on-prem via SignalR con timeout.
+    /// Usa InvokeAsync diretto (non il typed client) per supportare client results.
     /// </summary>
     private async Task<CleanupStepResult> InvokeAgentStepAsync(
         string connectionId,
         CleanupTarget target,
-        Func<ICleanupAgentClient, Task<CleanupStepResult>> action)
+        string methodName,
+        CleanupCommand command)
     {
         try
         {
             var client = _hubContext.Clients.Client(connectionId);
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
 
-            var result = await action(client);
-            return result;
+            _logger.LogInformation("Invocazione {Method} su agent per device {Device}",
+                methodName, command.DeviceDisplayName);
+
+            var result = await client.InvokeAsync<CleanupStepResult>(
+                methodName, command, cts.Token);
+            return result ?? CleanupStepResult.Failed($"Agent ha ritornato null per {target}");
         }
         catch (OperationCanceledException)
         {
