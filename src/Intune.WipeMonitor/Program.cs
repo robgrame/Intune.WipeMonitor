@@ -4,11 +4,34 @@ using Intune.WipeMonitor.Data;
 using Intune.WipeMonitor.Hubs;
 using Intune.WipeMonitor.Models;
 using Intune.WipeMonitor.Services;
+using Intune.WipeMonitor.Shared.Logging;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Serilog.Events;
 
 Console.WriteLine("[STARTUP] Intune Wipe Monitor starting...");
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog — Console + File CMTrace (nessuna dipendenza da DI)
+Console.WriteLine("[STARTUP] Configuring Serilog...");
+builder.Host.UseSerilog((context, configuration) =>
+{
+    configuration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .Enrich.WithMachineName()
+        .WriteTo.Console(outputTemplate:
+            "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+        .WriteTo.File(
+            formatter: new CMTraceFormatter("WipeMonitor.Web"),
+            path: "logs/wipemonitor-web-.log",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30);
+});
+Console.WriteLine("[STARTUP] Serilog OK");
 
 // Azure App Configuration + Key Vault references (con timeout e fallback)
 var appConfigEndpoint = builder.Configuration["AppConfig:Endpoint"];
@@ -47,15 +70,11 @@ if (!string.IsNullOrEmpty(appConfigEndpoint))
 // Application Insights
 builder.Services.AddApplicationInsightsTelemetry();
 
-// Configuration binding
+// Configuration binding (solo config pertinente al web app — AD e SCCM sono gestiti dall'agent on-prem)
 builder.Services.Configure<WipeMonitorSettings>(
     builder.Configuration.GetSection(WipeMonitorSettings.SectionName));
 builder.Services.Configure<GraphSettings>(
     builder.Configuration.GetSection(GraphSettings.SectionName));
-builder.Services.Configure<ActiveDirectorySettings>(
-    builder.Configuration.GetSection(ActiveDirectorySettings.SectionName));
-builder.Services.Configure<SccmSettings>(
-    builder.Configuration.GetSection(SccmSettings.SectionName));
 
 // Database (Azure SQL with Managed Identity)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -85,6 +104,11 @@ builder.Services.AddRazorComponents()
 Console.WriteLine("[STARTUP] Building app...");
 var app = builder.Build();
 
+// Startup banner (Serilog è pronto dopo Build, DI è disponibile)
+StartupBanner.PrintWebBanner(
+    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"),
+    app.Configuration);
+
 // Ensure DB schema (non-blocking - first SQL connection via MI token is slow)
 _ = Task.Run(async () =>
 {
@@ -93,11 +117,11 @@ _ = Task.Run(async () =>
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
-        Console.WriteLine("[STARTUP] Database schema verified");
+        Log.Information("[STARTUP] Database schema verified");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[STARTUP] WARN: DB init deferred: {ex.Message}");
+        Log.Warning(ex, "[STARTUP] DB init deferred, will retry on first request");
     }
 });
 
@@ -107,10 +131,13 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// Serilog request logging
+app.UseSerilogRequestLogging();
+
 if (appConfigLoaded)
     app.UseAzureAppConfiguration();
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseStatusCodePagesWithRedirects("/not-found");
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 
@@ -120,5 +147,5 @@ app.MapRazorComponents<App>()
 
 app.MapHub<CleanupHub>("/hub/cleanup");
 
-Console.WriteLine("[STARTUP] Pipeline ready, starting server...");
+Log.Information("[STARTUP] Pipeline ready, starting server...");
 app.Run();

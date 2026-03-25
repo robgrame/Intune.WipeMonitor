@@ -50,8 +50,6 @@ public static class StartupBanner
 
         AppendSection(sb, configuration, "WipeMonitor");
         AppendSection(sb, configuration, "Graph");
-        AppendSection(sb, configuration, "ActiveDirectory");
-        AppendSection(sb, configuration, "SCCM");
         AppendConfigValue(sb, configuration, "AppConfig:Endpoint");
         AppendConfigValue(sb, configuration, "ConnectionStrings:DefaultConnection");
         AppendConfigValue(sb, configuration, "ApplicationInsights:ConnectionString");
