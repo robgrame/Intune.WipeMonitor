@@ -6,6 +6,59 @@
 
 <h1 class="mb-4">📊 Dashboard</h1>
 
+@* Infrastructure Status Bar *@
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-center gap-4">
+                    <span class="fw-semibold text-muted small text-uppercase">Infrastruttura</span>
+
+                    @* Agent GW *@
+                    @{
+                        var agent = CleanupHub.ConnectedAgents.Values.FirstOrDefault();
+                    }
+                    @if (agent is not null && agent.IsAlive)
+                    {
+                        <span>
+                            <span class="status-led led-green"></span>
+                            <strong class="ms-1">Gateway</strong>
+                            <span class="text-muted small ms-1">@agent.AgentId (@agent.MachineName)</span>
+                        </span>
+                        <span>
+                            <span class="status-led @(agent.CanReachAD ? "led-green" : "led-red")"></span>
+                            <span class="ms-1">Active Directory</span>
+                        </span>
+                        <span>
+                            <span class="status-led @(agent.CanReachSccm ? "led-green" : "led-red")"></span>
+                            <span class="ms-1">SCCM</span>
+                        </span>
+                        <span class="text-muted small ms-auto">
+                            Heartbeat: @agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")
+                        </span>
+                    }
+                    else
+                    {
+                        <span>
+                            <span class="status-led led-red"></span>
+                            <strong class="ms-1">Gateway</strong>
+                            <span class="text-muted small ms-1">Non connesso</span>
+                        </span>
+                        <span>
+                            <span class="status-led led-grey"></span>
+                            <span class="ms-1">Active Directory</span>
+                        </span>
+                        <span>
+                            <span class="status-led led-grey"></span>
+                            <span class="ms-1">SCCM</span>
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @* Summary Cards *@
 <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">

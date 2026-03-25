@@ -7,9 +7,12 @@
 <h1 class="mb-4">⚙️ Stato Servizi</h1>
 
 <div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card @(BackgroundService.IsRunning ? "border-success" : "border-warning")">
-            <div class="card-header"><strong>📡 Polling Service</strong></div>
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="status-led @(BackgroundService.IsRunning ? "led-green" : "led-red")"></span>
+                <strong>📡 Polling Service</strong>
+            </div>
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-sm-5">Stato:</dt>
@@ -36,36 +39,83 @@
         </div>
     </div>
 
-    <div class="col-md-6 mb-4">
+    @{
+        var agent = CleanupHub.ConnectedAgents.Values.FirstOrDefault();
+        var agentAlive = agent is not null && agent.IsAlive;
+    }
+
+    <div class="col-md-4 mb-4">
         <div class="card">
-            <div class="card-header"><strong>🖧 Agent On-Premises</strong></div>
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="status-led @(agentAlive ? "led-green" : "led-red")"></span>
+                <strong>🖧 Gateway Agent</strong>
+            </div>
             <div class="card-body">
-                @if (!CleanupHub.ConnectedAgents.Any())
+                @if (agent is not null)
                 {
-                    <span class="badge bg-danger">Nessun agent connesso</span>
-                    <p class="text-muted mt-2 mb-0">L'agent on-prem deve essere avviato per eseguire il cleanup su AD e SCCM.</p>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Agent ID:</dt>
+                        <dd class="col-sm-7"><strong>@agent.AgentId</strong></dd>
+                        <dt class="col-sm-5">Machine:</dt>
+                        <dd class="col-sm-7">@agent.MachineName</dd>
+                        <dt class="col-sm-5">Versione:</dt>
+                        <dd class="col-sm-7">@agent.Version</dd>
+                        <dt class="col-sm-5">Connesso da:</dt>
+                        <dd class="col-sm-7">@agent.ConnectedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")</dd>
+                        <dt class="col-sm-5">Heartbeat:</dt>
+                        <dd class="col-sm-7">@agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")</dd>
+                    </dl>
                 }
                 else
                 {
-                    @foreach (var agent in CleanupHub.ConnectedAgents.Values)
-                    {
-                        <dl class="row mb-0">
-                            <dt class="col-sm-5">Agent:</dt>
-                            <dd class="col-sm-7">
-                                <span class="badge @(agent.IsAlive ? "bg-success" : "bg-warning")">
-                                    @(agent.IsAlive ? "Online" : "Non risponde")
-                                </span>
-                                <strong class="ms-1">@agent.AgentId</strong>
-                            </dd>
-                            <dt class="col-sm-5">Machine:</dt>
-                            <dd class="col-sm-7">@agent.MachineName (v@agent.Version)</dd>
-                            <dt class="col-sm-5">Connesso da:</dt>
-                            <dd class="col-sm-7">@agent.ConnectedAt.LocalDateTime.ToString("HH:mm:ss")</dd>
-                            <dt class="col-sm-5">Heartbeat:</dt>
-                            <dd class="col-sm-7">@agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")</dd>
-                        </dl>
-                    }
+                    <p class="text-muted mb-0">Nessun agent connesso. Avviare il servizio on-prem.</p>
                 }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header"><strong>🔗 Connettività On-Prem</strong></div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-6 d-flex align-items-center gap-2">
+                        <span class="status-led @(agentAlive && agent!.CanReachAD ? "led-green" : agentAlive ? "led-red" : "led-grey")"></span>
+                        Active Directory
+                    </dt>
+                    <dd class="col-sm-6">
+                        @if (!agentAlive)
+                        {
+                            <span class="text-muted">N/D</span>
+                        }
+                        else if (agent!.CanReachAD)
+                        {
+                            <span class="badge bg-success">Raggiungibile</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Non raggiungibile</span>
+                        }
+                    </dd>
+                    <dt class="col-sm-6 d-flex align-items-center gap-2">
+                        <span class="status-led @(agentAlive && agent!.CanReachSccm ? "led-green" : agentAlive ? "led-red" : "led-grey")"></span>
+                        SCCM
+                    </dt>
+                    <dd class="col-sm-6">
+                        @if (!agentAlive)
+                        {
+                            <span class="text-muted">N/D</span>
+                        }
+                        else if (agent!.CanReachSccm)
+                        {
+                            <span class="badge bg-success">Raggiungibile</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Non raggiungibile</span>
+                        }
+                    </dd>
+                </dl>
             </div>
         </div>
     </div>
