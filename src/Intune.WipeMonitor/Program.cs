@@ -168,7 +168,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // For Microsoft Identity UI sign-in/sign-out
 
-app.MapHub<CleanupHub>("/hub/cleanup");
+app.MapHub<CleanupHub>("/hub/cleanup").AllowAnonymous();
 
 Log.Information("[STARTUP] Pipeline ready, starting server...");
 app.Run();
