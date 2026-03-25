@@ -76,11 +76,15 @@ builder.Services.Configure<WipeMonitorSettings>(
 builder.Services.Configure<GraphSettings>(
     builder.Configuration.GetSection(GraphSettings.SectionName));
 
-// Database (Azure SQL with Managed Identity)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required");
+// Database (SQLite — portabile, può vivere su Azure File Share o share di rete)
+var dbPath = builder.Configuration["Database:Path"] ?? "wipemonitor.db";
+var dbDir = Path.GetDirectoryName(dbPath);
+if (!string.IsNullOrEmpty(dbDir) && !Directory.Exists(dbDir))
+    Directory.CreateDirectory(dbDir);
+var connectionString = $"Data Source={dbPath}";
+Console.WriteLine($"[STARTUP] Database: {dbPath}");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlite(connectionString));
 
 // HTTP clients
 builder.Services.AddHttpClient<GraphWipeMonitorService>();

@@ -1,6 +1,7 @@
 using Intune.WipeMonitor.Models;
 using Intune.WipeMonitor.Shared;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Intune.WipeMonitor.Data;
 
@@ -10,6 +11,16 @@ public class AppDbContext : DbContext
 
     public DbSet<DeviceCleanupRecord> DeviceCleanupRecords => Set<DeviceCleanupRecord>();
     public DbSet<CleanupStepLog> CleanupStepLogs => Set<CleanupStepLog>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // SQLite non supporta DateTimeOffset in ORDER BY.
+        // Convertiamo in stringa ISO 8601 (sortable, persistente, portabile).
+        configurationBuilder.Properties<DateTimeOffset>()
+            .HaveConversion<DateTimeOffsetToStringConverter>();
+        configurationBuilder.Properties<DateTimeOffset?>()
+            .HaveConversion<DateTimeOffsetToStringConverter>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

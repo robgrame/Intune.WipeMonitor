@@ -50,8 +50,8 @@ public static class StartupBanner
 
         AppendSection(sb, configuration, "WipeMonitor");
         AppendSection(sb, configuration, "Graph");
+        AppendConfigValue(sb, configuration, "Database:Path");
         AppendConfigValue(sb, configuration, "AppConfig:Endpoint");
-        AppendConfigValue(sb, configuration, "ConnectionStrings:DefaultConnection");
         AppendConfigValue(sb, configuration, "ApplicationInsights:ConnectionString");
 
         sb.AppendLine();
