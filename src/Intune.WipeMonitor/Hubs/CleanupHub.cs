@@ -31,14 +31,18 @@ public class CleanupHub : Hub<ICleanupAgentClient>, ICleanupHub
             MachineName = registration.MachineName,
             Version = registration.Version,
             ConnectedAt = DateTimeOffset.UtcNow,
-            LastHeartbeat = DateTimeOffset.UtcNow
+            LastHeartbeat = DateTimeOffset.UtcNow,
+            CanReachAD = registration.CanReachAD,
+            CanReachSccm = registration.CanReachSccm
         };
 
         _connectedAgents.AddOrUpdate(registration.AgentId, agent, (_, _) => agent);
 
         _logger.LogInformation(
-            "Agent registrato: {AgentId} su {MachineName} (v{Version}), ConnectionId: {ConnectionId}",
-            registration.AgentId, registration.MachineName, registration.Version, Context.ConnectionId);
+            "Agent registrato: {AgentId} su {MachineName} (v{Version}), AD: {AD}, SCCM: {SCCM}, ConnectionId: {ConnectionId}",
+            registration.AgentId, registration.MachineName, registration.Version,
+            registration.CanReachAD ? "✅" : "❌", registration.CanReachSccm ? "✅" : "❌",
+            Context.ConnectionId);
 
         return Task.CompletedTask;
     }
@@ -87,6 +91,8 @@ public class ConnectedAgent
     public string Version { get; set; } = string.Empty;
     public DateTimeOffset ConnectedAt { get; set; }
     public DateTimeOffset LastHeartbeat { get; set; }
+    public bool CanReachAD { get; set; }
+    public bool CanReachSccm { get; set; }
 
     public bool IsAlive => (DateTimeOffset.UtcNow - LastHeartbeat).TotalMinutes < 5;
 }

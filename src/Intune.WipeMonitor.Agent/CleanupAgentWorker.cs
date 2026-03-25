@@ -114,16 +114,27 @@ public class CleanupAgentWorker : BackgroundService
     {
         if (_connection is null) return;
 
+        var canReachAD = _adService.CanConnect();
+        var canReachSccm = _sccmService.CanConnect();
+
+        _logger.LogInformation(
+            "Verifica connettività: AD {ADStatus}, SCCM {SCCMStatus}",
+            canReachAD ? "✅ raggiungibile" : "❌ non raggiungibile",
+            canReachSccm ? "✅ raggiungibile" : "❌ non raggiungibile");
+
         var registration = new AgentRegistration
         {
             AgentId = _settings.AgentId,
             MachineName = Environment.MachineName,
             Version = typeof(CleanupAgentWorker).Assembly.GetName().Version?.ToString() ?? "1.0.0",
-            StartedAt = DateTimeOffset.UtcNow
+            StartedAt = DateTimeOffset.UtcNow,
+            CanReachAD = canReachAD,
+            CanReachSccm = canReachSccm
         };
 
         await _connection.InvokeAsync("RegisterAgent", registration);
-        _logger.LogInformation("Agent registrato al Hub come {AgentId}", _settings.AgentId);
+        _logger.LogInformation("Agent registrato al Hub come {AgentId} (AD: {AD}, SCCM: {SCCM})",
+            _settings.AgentId, canReachAD ? "OK" : "FAIL", canReachSccm ? "OK" : "FAIL");
     }
 
     private async Task<CleanupStepResult> HandleRemoveFromADAsync(CleanupCommand command)

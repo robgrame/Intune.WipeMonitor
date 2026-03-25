@@ -54,12 +54,17 @@ Monitors Microsoft Intune for completed device wipe operations and orchestrates 
    ```
 2. **Detection** — Devices with `actionState == "done"` are flagged as ready for cleanup
 3. **Approval** — An operator reviews and approves the cleanup from the Blazor dashboard
-4. **Cleanup** — The SignalR hub sends commands to the on-prem agent:
-   - **Active Directory** → LDAP delete of the computer object
-   - **SCCM** → AdminService REST API delete of the device record
+4. **SID Cross-Validation** — Before any deletion, the agent validates the device identity across all systems:
+   - Retrieves the computer **SID** (`objectSid`) from Active Directory
+   - Retrieves the device **SID** from SCCM (`SMS_R_System.SID`)
+   - Compares AD SID ↔ SCCM SID to ensure the same physical device
+   - If SIDs don't match, the cleanup is **blocked** with a `SidMismatch` result
+5. **Cleanup** — The SignalR hub sends commands to the on-prem agent:
+   - **Active Directory** → LDAP delete of the computer object (with SID validation)
+   - **SCCM** → AdminService REST API delete (with SID cross-check against AD)
    - **Intune** → Graph API delete (directly from the cloud)
    - **Entra ID** → Automatically cleaned up after AD sync
-5. **Auditing** — Every action is tracked with custom Application Insights events
+6. **Auditing** — Every action is tracked with custom Application Insights events, including matched SIDs for audit trail
 
 ## Projects
 
@@ -86,6 +91,29 @@ All cleanup operations emit structured custom events for auditing and monitoring
 | `Agent.Disconnected` | On-prem agent disconnected |
 | `WipePoll.Completed` | Graph API polling cycle completed |
 | `WipePoll.WipeDetected` | New completed wipe detected |
+
+## SID Cross-Validation
+
+The agent implements a safety chain to prevent accidental deletion of wrong devices:
+
+```
+CleanupCommand (device name + EntraDeviceId)
+     │
+     ▼
+┌─────────────┐    objectSid     ┌─────────────┐
+│  Active     │ ──────────────►  │  Compare    │
+│  Directory  │    (LDAP)        │  AD SID     │
+└─────────────┘                  │  vs         │
+                                 │  SCCM SID   │──► Match? → Proceed with deletion
+┌─────────────┐    SID           │             │──► Mismatch? → Block (SidMismatch)
+│  SCCM       │ ──────────────►  │             │
+│  AdminSvc   │   (REST)         └─────────────┘
+└─────────────┘
+```
+
+- If **AD SID ≠ SCCM SID**: deletion is blocked, `StepResult.SidMismatch` is returned
+- The matched SID is included in the `CleanupStepResult` for audit trail
+- All SID validation results are logged in CMTrace format and tracked in Application Insights
 
 **Example KQL queries:**
 

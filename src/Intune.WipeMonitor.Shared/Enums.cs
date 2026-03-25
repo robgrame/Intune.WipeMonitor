@@ -15,7 +15,9 @@ public enum StepResult
     Success,
     Failed,
     Skipped,
-    NotFound
+    NotFound,
+    /// <summary>Il SID del device non corrisponde tra AD, SCCM e/o Entra ID.</summary>
+    SidMismatch
 }
 
 /// <summary>Stato complessivo del processo di cleanup per un device.</summary>

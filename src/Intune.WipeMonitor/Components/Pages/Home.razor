@@ -52,12 +52,18 @@
                 {
                     @foreach (var agent in CleanupHub.ConnectedAgents.Values)
                     {
-                        <div class="d-flex align-items-center gap-3">
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
                             <span class="badge @(agent.IsAlive ? "bg-success" : "bg-warning")">
                                 @(agent.IsAlive ? "Online" : "Non risponde")
                             </span>
                             <strong>@agent.AgentId</strong>
                             <span class="text-muted">(@agent.MachineName, v@agent.Version)</span>
+                            <span class="badge @(agent.CanReachAD ? "bg-success" : "bg-danger")">
+                                AD @(agent.CanReachAD ? "✅" : "❌")
+                            </span>
+                            <span class="badge @(agent.CanReachSccm ? "bg-success" : "bg-danger")">
+                                SCCM @(agent.CanReachSccm ? "✅" : "❌")
+                            </span>
                             <span class="text-muted">
                                 Connesso: @agent.ConnectedAt.LocalDateTime.ToString("HH:mm:ss")
                                 | Heartbeat: @agent.LastHeartbeat.LocalDateTime.ToString("HH:mm:ss")

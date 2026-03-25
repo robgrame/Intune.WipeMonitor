@@ -36,6 +36,8 @@ public class CleanupCommand
     public string WipeActionId { get; set; } = string.Empty;
     public string DeviceDisplayName { get; set; } = string.Empty;
     public string ManagedDeviceId { get; set; } = string.Empty;
+    /// <summary>Entra Device ID (objectId) per cross-validazione SID.</summary>
+    public string EntraDeviceId { get; set; } = string.Empty;
 }
 
 /// <summary>Risultato di uno step di cleanup dall'agent.</summary>
@@ -43,11 +45,14 @@ public class CleanupStepResult
 {
     public StepResult Result { get; set; }
     public string? ErrorMessage { get; set; }
+    /// <summary>SID del computer object validato durante il cleanup (per audit trail).</summary>
+    public string? MatchedSid { get; set; }
     public DateTimeOffset ExecutedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public static CleanupStepResult Success() => new() { Result = StepResult.Success };
+    public static CleanupStepResult Success(string? sid = null) => new() { Result = StepResult.Success, MatchedSid = sid };
     public static CleanupStepResult NotFound(string msg) => new() { Result = StepResult.NotFound, ErrorMessage = msg };
     public static CleanupStepResult Failed(string msg) => new() { Result = StepResult.Failed, ErrorMessage = msg };
+    public static CleanupStepResult SidMismatch(string msg, string? sid = null) => new() { Result = StepResult.SidMismatch, ErrorMessage = msg, MatchedSid = sid };
 }
 
 /// <summary>Informazioni di registrazione dell'agent.</summary>
@@ -57,6 +62,10 @@ public class AgentRegistration
     public string MachineName { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>L'agent riesce a raggiungere il Domain Controller via LDAP.</summary>
+    public bool CanReachAD { get; set; }
+    /// <summary>L'agent riesce a raggiungere SCCM AdminService via HTTPS.</summary>
+    public bool CanReachSccm { get; set; }
 }
 
 /// <summary>Stato dell'agent.</summary>
