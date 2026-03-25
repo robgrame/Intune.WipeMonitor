@@ -70,6 +70,12 @@ try
     Log.Information("Intune Wipe Monitor Agent avviato su {Machine}", Environment.MachineName);
 
     var host = builder.Build();
+
+    // Startup banner con versione e configurazione
+    StartupBanner.PrintAgentBanner(
+        host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"),
+        builder.Configuration);
+
     host.Run();
 }
 catch (Exception ex)

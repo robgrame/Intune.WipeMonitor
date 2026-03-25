@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 
-// Bootstrap logger (prima che DI sia disponibile)
+// Bootstrap logger(prima che DI sia disponibile)
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
@@ -133,6 +133,12 @@ try
     app.MapHub<CleanupHub>("/hub/cleanup");
 
     Log.Information("Intune Wipe Monitor avviato");
+
+    // Startup banner con versione e configurazione
+    StartupBanner.PrintWebBanner(
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup"),
+        app.Configuration);
+
     app.Run();
 }
 catch (Exception ex)
