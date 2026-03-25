@@ -179,4 +179,25 @@ public static class StartupBanner
             return "unknown";
         }
     }
+
+    /// <summary>
+    /// Restituisce la versione nel formato Major.Minor.Build (2 cifre) per UI e footer.
+    /// </summary>
+    public static string GetShortVersion(string assemblyName = "Intune.WipeMonitor")
+    {
+        try
+        {
+            var asm = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => a.GetName().Name == assemblyName);
+
+            if (asm?.GetName().Version is { } v)
+                return $"{v.Major}.{v.Minor}.{v.Build}";
+
+            return "0.0.0";
+        }
+        catch
+        {
+            return "0.0.0";
+        }
+    }
 }
