@@ -1,5 +1,14 @@
 # Intune Wipe Monitor
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/)
+[![Azure](https://img.shields.io/badge/Azure-App%20Service%20%7C%20Key%20Vault%20%7C%20App%20Config-0078D4)](https://azure.microsoft.com)
+[![Microsoft Graph](https://img.shields.io/badge/Microsoft%20Graph-Beta%20API-orange)](https://learn.microsoft.com/graph/)
+[![Blazor](https://img.shields.io/badge/Blazor-Server-512BD4)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![SignalR](https://img.shields.io/badge/SignalR-Real--time-brightgreen)](https://learn.microsoft.com/aspnet/core/signalr/)
+[![App Insights](https://img.shields.io/badge/App%20Insights-Telemetry-68217A)](https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview)
+[![Serilog](https://img.shields.io/badge/Serilog-CMTrace%20Format-red)](https://serilog.net/)
+
 **Automated device lifecycle management after Intune wipe (factory reset) actions.**
 
 Monitors Microsoft Intune for completed device wipe operations and orchestrates the cleanup of device objects from Active Directory, SCCM, and Intune — ensuring no device is removed until the wipe is confirmed as done.
