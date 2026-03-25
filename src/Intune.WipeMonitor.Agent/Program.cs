@@ -4,17 +4,40 @@ using Intune.WipeMonitor.Shared.Logging;
 using Serilog;
 using Serilog.Events;
 
-// Bootstrap logger
+// Imposta la working directory alla cartella dell'eseguibile (necessario per Windows Service)
+var exeDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+Directory.SetCurrentDirectory(exeDir);
+var logPath = Path.Combine(exeDir, "logs", "wipemonitor-agent-.log");
+
+// Bootstrap logger — scrive sia su console che su file in formato CMTrace
+Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .WriteTo.Console()
+    .WriteTo.File(
+        formatter: new CMTraceFormatter("WipeMonitor.Agent"),
+        path: logPath,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30,
+        flushToDiskInterval: TimeSpan.FromSeconds(1))
     .CreateBootstrapLogger();
 
 try
 {
+    Log.Information("Intune Wipe Monitor Agent avvio su {Machine}...", Environment.MachineName);
+
     var builder = Host.CreateApplicationBuilder(args);
 
-    // Serilog con CMTrace formatter per file + console + App Insights
+    // Configurazione per eseguire come Windows Service
+    builder.Services.AddWindowsService(options =>
+    {
+        options.ServiceName = "Intune.WipeMonitor.Agent";
+    });
+
+    // Application Insights
+    builder.Services.AddApplicationInsightsTelemetryWorkerService();
+
+    // Serilog con CMTrace formatter per file + console (telemetria App Insights gestita dal Worker)
     builder.Services.AddSerilog((services, configuration) =>
     {
         configuration
@@ -26,22 +49,10 @@ try
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 formatter: new CMTraceFormatter("WipeMonitor.Agent"),
-                path: "logs/wipemonitor-agent-.log",
+                path: logPath,
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 30)
-            .WriteTo.ApplicationInsights(
-                services.GetRequiredService<Microsoft.ApplicationInsights.TelemetryClient>(),
-                new Serilog.Sinks.ApplicationInsights.TelemetryConverters.TraceTelemetryConverter());
+                retainedFileCountLimit: 30);
     });
-
-    // Configurazione per eseguire come Windows Service
-    builder.Services.AddWindowsService(options =>
-    {
-        options.ServiceName = "Intune.WipeMonitor.Agent";
-    });
-
-    // Application Insights (dalla macchina on-prem)
-    builder.Services.AddApplicationInsightsTelemetryWorkerService();
 
     // Settings
     builder.Services.Configure<AgentSettings>(
@@ -62,12 +73,9 @@ try
             }
             return handler;
         });
-    builder.Services.AddSingleton<SccmService>();
 
     // Worker
     builder.Services.AddHostedService<CleanupAgentWorker>();
-
-    Log.Information("Intune Wipe Monitor Agent avviato su {Machine}", Environment.MachineName);
 
     var host = builder.Build();
 
