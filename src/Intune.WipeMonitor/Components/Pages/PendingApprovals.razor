@@ -1,5 +1,6 @@
 @page "/approvals"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject AppDbContext Db
 @inject CleanupOrchestrator Orchestrator
 @inject AuthenticationStateProvider AuthState
@@ -169,10 +170,16 @@ else
     private string? processingId;
     private string? statusMessage;
     private string statusAlertClass = "alert-success";
+    private Timer? _timer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
+        _timer = new Timer(async _ => await InvokeAsync(async () =>
+        {
+            await LoadDataAsync();
+            StateHasChanged();
+        }), null, 30_000, 30_000);
     }
 
     private async Task LoadDataAsync()
@@ -288,4 +295,6 @@ else
         var authState = await AuthState.GetAuthenticationStateAsync();
         return authState.User.Identity?.Name ?? "unknown";
     }
+
+    public void Dispose() => _timer?.Dispose();
 }
