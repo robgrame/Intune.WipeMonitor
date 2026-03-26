@@ -1,5 +1,6 @@
 @page "/status"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject WipeMonitorBackgroundService BackgroundService
 
 <PageTitle>Stato Servizi — Wipe Monitor</PageTitle>
@@ -120,3 +121,14 @@
         </div>
     </div>
 </div>
+
+@code {
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _timer = new Timer(_ => InvokeAsync(StateHasChanged), null, 0, 5000);
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -41,7 +41,7 @@ public class CleanupHub : Hub<ICleanupAgentClient>, ICleanupHub
         _logger.LogInformation(
             "Agent registrato: {AgentId} su {MachineName} (v{Version}), AD: {AD}, SCCM: {SCCM}, ConnectionId: {ConnectionId}",
             registration.AgentId, registration.MachineName, registration.Version,
-            registration.CanReachAD ? "✅" : "❌", registration.CanReachSccm ? "✅" : "❌",
+            registration.CanReachAD, registration.CanReachSccm,
             Context.ConnectionId);
 
         return Task.CompletedTask;
