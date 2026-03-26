@@ -90,6 +90,8 @@ $graphResourceId = "00000003-0000-0000-c000-000000000000"
 az ad app permission add --id $graphObjectId --api $graphResourceId --api-permissions "243333ab-4d21-40cb-a475-36241daa0842=Role" 2>$null
 # DeviceManagementRBAC.Read.All
 az ad app permission add --id $graphObjectId --api $graphResourceId --api-permissions "58ca0d9a-1575-47e1-a3cb-007ef2e4583b=Role" 2>$null
+# DeviceManagementServiceConfig.ReadWrite.All (Autopilot cleanup)
+az ad app permission add --id $graphObjectId --api $graphResourceId --api-permissions "5ac13192-7ace-4fcf-b828-1a26f28068ee=Role" 2>$null
 Write-Host "  Permessi Graph aggiunti" -ForegroundColor Green
 
 # Client secret

@@ -98,6 +98,14 @@ CLEANUP PIPELINE (4 step in sequenza dopo approvazione):
 | `Intune.WipeMonitor` | `f3baa699-2f8c-46e0-8e99-925fddb69030` | Graph API (wipe polling, Autopilot/Intune delete) |
 | `Intune.WipeMonitor.Portal` | `42c85dd0-f652-459f-bf41-caf7ec741c00` | Dashboard auth (Entra ID + WipeMonitor-Admin role) |
 
+#### Graph API Permissions (`Intune.WipeMonitor`)
+
+| Permission | Type | Scopo |
+|---|---|---|
+| `DeviceManagementManagedDevices.ReadWrite.All` | Application | Polling wipe actions + delete Intune device |
+| `DeviceManagementRBAC.Read.All` | Application | Read RBAC configuration |
+| `DeviceManagementServiceConfig.ReadWrite.All` | Application | Delete Autopilot device identity |
+
 ### Tenant & Subscription
 - Tenant: `d6dbad84-5922-4700-a049-c7068c37c884`
 - Subscription: `74c8c33a-f447-4f1e-890c-f6f71833c8be`

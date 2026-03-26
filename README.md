@@ -157,6 +157,7 @@ Logs are written to `logs/wipemonitor-web-YYYYMMDD.log` and `logs/wipemonitor-ag
 - An **App Registration** in Entra ID with:
   - `DeviceManagementManagedDevices.ReadWrite.All` (Application permission)
   - `DeviceManagementRBAC.Read.All` (Application permission)
+  - `DeviceManagementServiceConfig.ReadWrite.All` (Application permission — Autopilot cleanup)
 - Client secret stored in Key Vault
 
 ### On-Premises (Agent)

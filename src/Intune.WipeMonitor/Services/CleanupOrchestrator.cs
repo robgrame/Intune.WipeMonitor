@@ -101,7 +101,7 @@ public class CleanupOrchestrator
 
         var allSuccess = true;
 
-        // Step 1: Autopilot (direttamente via Graph API dal cloud — primo step)
+        // Step 1: Autopilot (direttamente via Graph API dal cloud — non bloccante)
         var (autopilotOk, autopilotNotFound) = await _graphService.DeleteAutopilotDeviceAsync(
             record.DeviceDisplayName, record.ManagedDeviceId, cancellationToken);
         var autopilotResult = autopilotNotFound
@@ -109,7 +109,9 @@ public class CleanupOrchestrator
             : autopilotOk
                 ? CleanupStepResult.Success()
                 : CleanupStepResult.Failed("Errore durante la rimozione da Autopilot");
-        allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.Autopilot, autopilotResult, cancellationToken);
+        await PersistStepResultAsync(db, record, CleanupTarget.Autopilot, autopilotResult, cancellationToken);
+        if (!autopilotOk && !autopilotNotFound)
+            _logger.LogWarning("Autopilot cleanup fallito per {Device} — continuo con AD/SCCM/Intune", record.DeviceDisplayName);
         _telemetry.TrackAutopilotDeletion(record, autopilotResult);
 
         // Step 2: Active Directory (via agent on-prem)
