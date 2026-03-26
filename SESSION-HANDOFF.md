@@ -11,7 +11,7 @@
 |---|---|---|
 | **Web App Blazor** | ✅ Live | https://intune-wipemonitor-app.azurewebsites.net |
 | **Entra ID Auth** | ✅ | Ruolo WipeMonitor-Admin richiesto |
-| **Graph API Polling** | ✅ | 10 wipe actions recuperate ogni 60 min |
+| **Graph API Polling** | ✅ | 10 wipe actions recuperate ogni 1 min |
 | **Autopilot Cleanup** | ✅ | Primo step cleanup via Graph API |
 | **SignalR Hub** | ✅ | `/hub/cleanup` con API key auth |
 | **Teams Notifications** | ✅ | Adaptive Card via Power Automate webhook |

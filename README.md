@@ -21,7 +21,7 @@ Monitors Microsoft Intune for completed device wipe operations and orchestrates 
 
 ## How It Works
 
-1. **Polling** — A background service queries the Microsoft Graph API every 60 minutes (configurable):
+1. **Polling** — A background service queries the Microsoft Graph API every minute (configurable):
    ```
    GET /beta/deviceManagement/remoteActionAudits?$filter=action eq 'factoryReset'
    ```

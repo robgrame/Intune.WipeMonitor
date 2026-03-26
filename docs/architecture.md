@@ -52,7 +52,7 @@ graph TB
     end
 
     %% Connections
-    APP -->|"① Poll wipe actions<br/><i>ogni 60 min</i>"| GRAPH
+    APP -->|"① Poll wipe actions<br/><i>ogni 1 min</i>"| GRAPH
     APP -->|"② Notifica approvazione"| TEAMS
     APP <-->|"③ SignalR WSS<br/><i>Cleanup commands</i>"| AGENT
     APP -->|"④ Delete Autopilot"| GRAPH
@@ -89,7 +89,7 @@ sequenceDiagram
     participant AD as 🏛️ Active Directory
     participant S as 📦 SCCM
 
-    Note over I,W: Polling (ogni 60 min)
+    Note over I,W: Polling (ogni 1 min)
     W->>I: GET remoteActionAudits?$filter=factoryReset
     I-->>W: wipe actions (pending/done)
     
