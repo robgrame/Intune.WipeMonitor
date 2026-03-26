@@ -116,16 +116,20 @@ customEvents
 
 ## Teams Notifications
 
-When a wipe is completed and a device needs approval, an **Adaptive Card** is sent to a Microsoft Teams channel via Incoming Webhook:
+When a wipe is completed and a device needs approval, an **Adaptive Card** is sent to a Microsoft Teams channel:
 
 - 📢 **Approval request** — device name, owner, wipe date, "Open Approvals" button
 - ✅/❌ **Cleanup result** — device name, who approved, success or failure
 
 ### Setup
 
-1. In Teams, create an **Incoming Webhook** in the desired channel (Settings → Connectors → Incoming Webhook)
-2. Set `WipeMonitor:TeamsWebhookUrl` in App Configuration or App Settings
-3. Optionally set `WipeMonitor:DashboardUrl` for the "Open Approvals" button link
+1. In Teams, go to the target channel → **⋯** → **Workflows** → **"Post to a channel when a webhook request is received"**
+2. Copy the generated URL (e.g. `https://prod-xx.westeurope.logic.azure.com:443/workflows/...`)
+3. Set `WipeMonitor:TeamsWebhookUrl` in App Configuration or App Settings
+4. Optionally set `WipeMonitor:DashboardUrl` for the button link in the card
+
+> **Note**: The classic Incoming Webhook connector is being deprecated. Use the Power Automate Workflows approach. The Adaptive Card payload is identical for both.
+> If no webhook URL is configured, notifications are silently skipped.
 
 ## Logging — CMTrace Format
 
