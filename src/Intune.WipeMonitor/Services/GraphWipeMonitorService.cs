@@ -226,6 +226,13 @@ public class GraphWipeMonitorService
     {
         try
         {
+            // Validate managedDeviceId is a valid GUID to prevent OData injection
+            if (!Guid.TryParse(managedDeviceId, out _))
+            {
+                _logger.LogWarning("managedDeviceId non è un GUID valido: {Id}", managedDeviceId);
+                return (false, false);
+            }
+
             var token = await GetAccessTokenAsync(cancellationToken);
             var headers = new AuthenticationHeaderValue("Bearer", token);
 

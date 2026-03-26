@@ -105,7 +105,8 @@ public class SccmService
 
     private async Task<SccmDeviceInfo?> FindDeviceInfoAsync(string deviceName, CancellationToken cancellationToken)
     {
-        var url = $"{_settings.Sccm.AdminServiceUrl}/wmi/SMS_R_System?$filter=Name eq '{deviceName}'&$select=ResourceId,Name,SID";
+        var escapedName = Uri.EscapeDataString(deviceName).Replace("'", "''");
+        var url = $"{_settings.Sccm.AdminServiceUrl}/wmi/SMS_R_System?$filter=Name eq '{escapedName}'&$select=ResourceId,Name,SID";
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         ConfigureAuth(request);
 

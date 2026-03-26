@@ -1,4 +1,5 @@
 using Azure.Identity;
+using Intune.WipeMonitor.Auth;
 using Intune.WipeMonitor.Components;
 using Intune.WipeMonitor.Data;
 using Intune.WipeMonitor.Hubs;
@@ -80,11 +81,18 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("WipeMonitorAdmin", policy =>
         policy.RequireRole("WipeMonitor-Admin"));
+    options.AddPolicy("AgentApiKey", policy =>
+        policy.RequireAuthenticatedUser());
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 });
 builder.Services.AddCascadingAuthenticationState();
+
+// Agent API Key authentication for SignalR hub
+builder.Services.AddAuthentication()
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentApiKeyAuthHandler>(
+        "AgentApiKey", null);
 
 // Configuration binding(solo config pertinente al web app — AD e SCCM sono gestiti dall'agent on-prem)
 builder.Services.Configure<WipeMonitorSettings>(
@@ -170,7 +178,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // For Microsoft Identity UI sign-in/sign-out
 
-app.MapHub<CleanupHub>("/hub/cleanup").AllowAnonymous();
+app.MapHub<CleanupHub>("/hub/cleanup");
 
 Log.Information("[STARTUP] Pipeline ready, starting server...");
 app.Run();

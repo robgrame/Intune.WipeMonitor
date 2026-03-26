@@ -21,6 +21,9 @@ public class WipeMonitorSettings
 
     /// <summary>URL base della dashboard (per i link nelle notifiche Teams).</summary>
     public string? DashboardUrl { get; set; }
+
+    /// <summary>API Key per l'autenticazione dell'agent on-prem al SignalR Hub.</summary>
+    public string? AgentApiKey { get; set; }
 }
 
 public class GraphSettings
