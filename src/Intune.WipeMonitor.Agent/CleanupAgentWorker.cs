@@ -70,7 +70,12 @@ public class CleanupAgentWorker : BackgroundService
             .WithUrl(_settings.HubUrl, options =>
             {
                 if (!string.IsNullOrEmpty(_settings.ApiKey))
+                {
                     options.Headers.Add("X-Api-Key", _settings.ApiKey);
+                    // AccessTokenProvider invia il token come Authorization: Bearer (HTTP)
+                    // e come ?access_token= (WebSocket) — più affidabile durante reconnect
+                    options.AccessTokenProvider = () => Task.FromResult<string?>(_settings.ApiKey);
+                }
             })
             .WithAutomaticReconnect()
             .Build();

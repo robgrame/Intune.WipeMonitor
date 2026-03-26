@@ -8,7 +8,8 @@ namespace Intune.WipeMonitor.Auth;
 
 /// <summary>
 /// Autenticazione API Key per l'agent on-prem che si connette al SignalR Hub.
-/// L'agent invia la chiave come query string: /hub/cleanup?api_key=xxx
+/// Accetta la chiave tramite header X-Api-Key, query string api_key/access_token,
+/// oppure Authorization: Bearer (usato da SignalR AccessTokenProvider).
 /// La chiave è configurata in WipeMonitor:AgentApiKey.
 /// </summary>
 public class AgentApiKeyAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
@@ -30,8 +31,15 @@ public class AgentApiKeyAuthHandler : AuthenticationHandler<AuthenticationScheme
         // Questo handler si attiva solo per il SignalR hub
         // Le pagine Blazor usano OpenID Connect (Entra ID)
 
-        var apiKey = Context.Request.Query["api_key"].FirstOrDefault()
-            ?? Context.Request.Headers["X-Api-Key"].FirstOrDefault();
+        // Controlla tutte le fonti possibili di API key:
+        // 1. Header X-Api-Key (invio diretto dall'agent)
+        // 2. Query string access_token (SignalR AccessTokenProvider per WebSocket)
+        // 3. Query string api_key (compatibilità)
+        // 4. Authorization: Bearer (SignalR AccessTokenProvider per HTTP)
+        var apiKey = Context.Request.Headers["X-Api-Key"].FirstOrDefault()
+            ?? Context.Request.Query["access_token"].FirstOrDefault()
+            ?? Context.Request.Query["api_key"].FirstOrDefault()
+            ?? ExtractBearerToken();
 
         if (string.IsNullOrEmpty(apiKey))
             return Task.FromResult(AuthenticateResult.NoResult());
@@ -59,5 +67,13 @@ public class AgentApiKeyAuthHandler : AuthenticationHandler<AuthenticationScheme
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+
+    private string? ExtractBearerToken()
+    {
+        var authHeader = Context.Request.Headers["Authorization"].FirstOrDefault();
+        if (authHeader is not null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return authHeader["Bearer ".Length..];
+        return null;
     }
 }
