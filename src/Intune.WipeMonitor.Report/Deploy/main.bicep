@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // Intune Wipe Monitor Report — Azure Function Infrastructure
-// Deploys: Function App (Consumption), Storage Account,
-//          Application Insights
+// Deploys: Function App (Linux, .NET 10 isolated), Storage Account,
+//          Application Insights, RBAC for Managed Identity
 // ─────────────────────────────────────────────────────────────
 
 @description('Azure region for all resources')
@@ -77,7 +77,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   properties: {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
-    allowSharedKeyAccess: true
+    allowSharedKeyAccess: false
   }
 }
 
@@ -159,8 +159,20 @@ resource storageQueueRole 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   }
 }
 
+// Storage Table Data Contributor for Function App (timer state)
+resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, funcApp.id, '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
+  scope: storage
+  properties: {
+    principalId: funcApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
+  }
+}
+
 // ── Outputs ─────────────────────────────────────────────────
 output functionAppName string = funcApp.name
 output functionAppHostname string = funcApp.properties.defaultHostName
+output functionAppPrincipalId string = funcApp.identity.principalId
 output appInsightsConnectionString string = appInsights.properties.ConnectionString
 output storageAccountName string = storage.name
