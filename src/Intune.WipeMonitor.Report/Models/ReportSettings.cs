@@ -18,6 +18,9 @@ public class ReportSettings
 
     /// <summary>Number of days to include in the report (default 30).</summary>
     public int ReportDays { get; set; } = 30;
+
+    /// <summary>CRON schedule for the report (default: Monday 08:00 UTC).</summary>
+    public string Schedule { get; set; } = "0 0 8 * * 1";
 }
 
 public class GraphSettings

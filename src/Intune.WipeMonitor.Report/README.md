@@ -79,6 +79,7 @@ az rest --method GET --url "https://graph.microsoft.com/v1.0/sites/{siteId}/driv
 | `Report__SharePointFolderPath` | Cartella per i report (default: `WipeMonitor Reports`) |
 | `Report__TeamsWebhookUrl` | URL webhook Power Automate per Teams |
 | `Report__ReportDays` | Giorni da includere nel report (default: `30`) |
+| `Report__Schedule` | CRON expression per la frequenza (default: `0 0 8 * * 1` = lunedì 08:00 UTC) |
 
 ### 3. Teams Webhook (Power Automate)
 

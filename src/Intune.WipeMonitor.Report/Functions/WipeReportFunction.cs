@@ -40,7 +40,7 @@ public class WipeReportFunction
     /// </summary>
     [Function("WipeReport")]
     public async Task Run(
-        [TimerTrigger("0 0 8 * * 1")] TimerInfo timer,
+        [TimerTrigger("%Report__Schedule%")] TimerInfo timer,
         CancellationToken ct)
     {
         _logger.LogInformation("=== Wipe Report — Inizio generazione (ultimi {Days} giorni) ===",

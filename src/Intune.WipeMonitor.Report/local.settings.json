@@ -10,6 +10,7 @@
     "Report__SharePointDriveId": "",
     "Report__SharePointFolderPath": "WipeMonitor Reports",
     "Report__TeamsWebhookUrl": "",
-    "Report__ReportDays": "30"
+    "Report__ReportDays": "30",
+    "Report__Schedule": "0 0 8 * * 1"
   }
 }
