@@ -43,29 +43,71 @@ public class WipeReportFunction
         [TimerTrigger("0 0 8 * * 1")] TimerInfo timer,
         CancellationToken ct)
     {
-        _logger.LogInformation("=== Wipe Report — Inizio generazione ===");
+        _logger.LogInformation("=== Wipe Report — Inizio generazione (ultimi {Days} giorni) ===",
+            _settings.ReportDays);
 
         // 1. Recupera dati: wipe actions + cross-reference Entra ID
-        var entries = await _graphService.BuildReportDataAsync(ct);
+        List<WipeReportEntry> entries;
+        try
+        {
+            entries = await _graphService.BuildReportDataAsync(ct);
+            _logger.LogInformation("[STEP 1/4] Dati recuperati: {Count} wipe actions, {Pending} pending Entra",
+                entries.Count, entries.Count(e => e.IsEntraPending));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[STEP 1/4 FAILED] Errore recupero dati da Graph API");
+            throw;
+        }
 
         if (entries.Count == 0)
         {
-            _logger.LogInformation("Nessuna wipe action trovata negli ultimi {Days} giorni. Report non generato.",
-                _settings.ReportDays);
+            _logger.LogInformation("Nessuna wipe action trovata. Report non generato.");
             return;
         }
 
         // 2. Genera Excel
-        var excelBytes = _excelBuilder.Build(entries, _settings.ReportDays);
+        byte[] excelBytes;
         var fileName = $"WipeReport_{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+        try
+        {
+            excelBytes = _excelBuilder.Build(entries, _settings.ReportDays);
+            _logger.LogInformation("[STEP 2/4] Excel generato: {FileName} ({Size} KB)",
+                fileName, excelBytes.Length / 1024);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[STEP 2/4 FAILED] Errore generazione Excel");
+            throw;
+        }
 
         // 3. Upload su SharePoint
-        var reportUrl = await _sharePointService.UploadReportAsync(excelBytes, fileName, ct);
+        string reportUrl;
+        try
+        {
+            reportUrl = await _sharePointService.UploadReportAsync(excelBytes, fileName, ct);
+            _logger.LogInformation("[STEP 3/4] Upload SharePoint completato: {Url}", reportUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[STEP 3/4 FAILED] Errore upload su SharePoint (Site: {SiteId}, Drive: {DriveId})",
+                _settings.SharePointSiteId, _settings.SharePointDriveId);
+            throw;
+        }
 
         // 4. Notifica Teams
-        await _teamsNotifier.NotifyAsync(entries, reportUrl, ct);
+        try
+        {
+            await _teamsNotifier.NotifyAsync(entries, reportUrl, ct);
+            _logger.LogInformation("[STEP 4/4] Notifica Teams inviata");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[STEP 4/4 FAILED] Errore invio notifica Teams");
+            throw;
+        }
 
-        _logger.LogInformation("=== Wipe Report completato: {Count} device, report: {Url} ===",
-            entries.Count, reportUrl);
+        _logger.LogInformation("=== Wipe Report completato: {Count} device, {Pending} pending Entra, report: {Url} ===",
+            entries.Count, entries.Count(e => e.IsEntraPending), reportUrl);
     }
 }

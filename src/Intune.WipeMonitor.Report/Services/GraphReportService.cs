@@ -97,13 +97,28 @@ public class GraphReportService
 
     private async Task EnrichWithEntraDataAsync(WipeReportEntry entry, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(entry.DeviceName))
+        {
+            _logger.LogDebug("Device name vuoto, skip Entra lookup");
+            return;
+        }
+
         try
         {
-            var filter = Uri.EscapeDataString($"displayName eq '{entry.DeviceName}'");
-            var url = $"https://graph.microsoft.com/v1.0/devices?$filter={filter}" +
-                      "&$select=id,displayName,operatingSystem,operatingSystemVersion,trustType,accountEnabled,approximateLastSignInDateTime";
+            var escapedName = entry.DeviceName.Replace("'", "''");
+            var url = $"https://graph.microsoft.com/v1.0/devices?$filter={Uri.EscapeDataString($"displayName eq '{escapedName}'")}" +
+                      $"&$select={Uri.EscapeDataString("id,displayName,operatingSystem,operatingSystemVersion,trustType,accountEnabled,approximateLastSignInDateTime")}";
 
-            var response = await _http.GetFromJsonAsync<GraphPagedResponse<EntraDeviceDto>>(url, JsonOptions, ct);
+            var httpResponse = await _http.GetAsync(url, ct);
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                var errorBody = await httpResponse.Content.ReadAsStringAsync(ct);
+                _logger.LogWarning("Entra query fallita per {Device}: HTTP {Status} — {Body}",
+                    entry.DeviceName, (int)httpResponse.StatusCode, errorBody);
+                return;
+            }
+
+            var response = await httpResponse.Content.ReadFromJsonAsync<GraphPagedResponse<EntraDeviceDto>>(JsonOptions, ct);
             var device = response?.Value.FirstOrDefault();
 
             if (device is not null)
@@ -116,11 +131,16 @@ public class GraphReportService
                 entry.TrustType = device.TrustType;
                 entry.EntraAccountEnabled = device.AccountEnabled;
                 entry.EntraLastSignIn = device.ApproximateLastSignInDateTime;
+                _logger.LogDebug("Entra device trovato: {Device} (ID: {Id})", entry.DeviceName, device.Id);
+            }
+            else
+            {
+                _logger.LogDebug("Entra device non trovato: {Device}", entry.DeviceName);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Errore query Entra per device {Device}", entry.DeviceName);
+            _logger.LogWarning(ex, "Eccezione query Entra per device {Device}", entry.DeviceName);
         }
     }
 

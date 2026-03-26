@@ -85,17 +85,20 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 resource funcPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: names.funcPlan
   location: location
+  kind: 'linux'
   sku: {
     name: 'Y1'
     tier: 'Dynamic'
   }
-  properties: {}
+  properties: {
+    reserved: true
+  }
 }
 
 resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
   name: names.funcApp
   location: location
-  kind: 'functionapp'
+  kind: 'functionapp,linux'
   identity: {
     type: 'SystemAssigned'
   }

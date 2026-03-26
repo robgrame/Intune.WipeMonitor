@@ -46,12 +46,20 @@ public class SharePointUploadService
                   $"/drives/{_reportSettings.SharePointDriveId}" +
                   $"/root:/{folderPath}/{fileName}:/content";
 
+        _logger.LogInformation("Upload SharePoint: PUT {Url} ({Size} KB)", url, fileContent.Length / 1024);
+
         using var content = new ByteArrayContent(fileContent);
         content.Headers.ContentType = new MediaTypeHeaderValue(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
         var response = await _http.PutAsync(url, content, ct);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("SharePoint upload fallito: HTTP {Status} — {Body}",
+                (int)response.StatusCode, errorBody);
+            response.EnsureSuccessStatusCode();
+        }
 
         // Estrai il webUrl dalla risposta
         var json = await response.Content.ReadFromJsonAsync<SharePointFileResponse>(cancellationToken: ct);
