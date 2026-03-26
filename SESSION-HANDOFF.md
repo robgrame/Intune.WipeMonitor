@@ -23,51 +23,49 @@
 | **IaC Bicep** | ✅ | `Deploy/main.bicep` + `Deploy-Infrastructure.ps1` |
 | **Security hardening** | ✅ | HTTPS-only, TLS 1.2, LDAP/OData injection fixes |
 
-## ❌ Azione richiesta ORA: Aggiornare l'Agent on-prem
+## ✅ Agent On-Prem — Deployato e connesso
 
-L'agent ha un errore di negoziazione SignalR perché il server ora richiede API key auth. L'agent va ricompilato e rideployato sulla VM.
+Agent deployato il **2026-03-26** su `HVHOST` come Windows Service.
 
-### Passi:
+| Dettaglio | Valore |
+|---|---|
+| Servizio | `Intune.WipeMonitor.Agent` (Automatic) |
+| Binari | `C:\Services\WipeMonitor.Agent\` |
+| AgentId | `AGENT-HVHOST` |
+| Hub | Connesso ✅ (`Connesso al Hub` nei log) |
+| AD | ❌ Non configurato (Server/SearchBase vuoti) |
+| SCCM | ❌ Non configurato (AdminServiceUrl vuoto) |
+| Log CMTrace | `C:\Services\WipeMonitor.Agent\logs\wipemonitor-agent-*.log` |
+| API Key | Nuova chiave generata e configurata su agent + Azure App Settings |
 
-```powershell
-# 1. Pull the latest code
-cd C:\path\to\Intune.WipeMonitor
-git pull
+### ❌ Da completare: Configurazione AD e SCCM
 
-# 2. Edit appsettings.json — add ApiKey to Agent section
-# File: src/Intune.WipeMonitor.Agent/appsettings.json
-```
+Editare `C:\Services\WipeMonitor.Agent\appsettings.json` sulla VM e riavviare il servizio:
 
-Aggiungere `ApiKey` nella sezione Agent:
 ```json
 {
   "Agent": {
-    "AgentId": "YOURNAME",
-    "HubUrl": "https://intune-wipemonitor-app.azurewebsites.net/hub/cleanup",
-    "ApiKey": "1wpaDNk3u1dwzIfu3SKIomilG+50LZm7MozTALRnlYk=",
-    "HeartbeatIntervalSeconds": 60,
-    "ActiveDirectory": { ... },
-    "Sccm": { ... }
+    "ActiveDirectory": {
+      "Server": "<DC_HOSTNAME>",
+      "SearchBase": "<DC=domain,DC=com>",
+      "Port": 389
+    },
+    "Sccm": {
+      "AdminServiceUrl": "https://<SCCM_SERVER>/AdminService"
+    }
   }
 }
 ```
 
 ```powershell
-# 3. Publish
-cd src\Intune.WipeMonitor.Agent
-dotnet publish -c Release -o C:\Services\WipeMonitor.Agent
-
-# 4. Restart service
+# Dopo aver aggiornato appsettings.json:
 sc.exe stop "Intune.WipeMonitor.Agent"
 sc.exe start "Intune.WipeMonitor.Agent"
 
-# 5. Verify in logs: should see "Connesso al Hub" without negotiation errors
+# Verificare nei log:
+Get-Content C:\Services\WipeMonitor.Agent\logs\wipemonitor-agent-*.log -Tail 20
+# Aspettarsi: AD "✅ raggiungibile", SCCM "✅ raggiungibile"
 ```
-
-### Dopo il restart, verificare:
-- Nei log CMTrace dell'agent: `Agent registrato al Hub come YOURNAME`
-- Nella dashboard web: pagina **Stato Servizi** mostra LED verde per Gateway
-- Nella pagina **Dashboard**: barra infrastruttura mostra Gateway/AD/SCCM con LED
 
 ---
 
@@ -110,8 +108,7 @@ Il Hub usa una policy `AgentOrUser` che accetta:
 - **OpenIdConnect** (Entra ID) — per browser/dashboard
 - **AgentApiKey** — per l'agent on-prem, via header `X-Api-Key` o query `?api_key=`
 
-API Key corrente: `1wpaDNk3u1dwzIfu3SKIomilG+50LZm7MozTALRnlYk=`
-Configurata in: `WipeMonitor:AgentApiKey` (App Settings sul Web App)
+API Key configurata in: `WipeMonitor:AgentApiKey` (App Settings sul Web App) e nell'agent `appsettings.json`
 
 ## Teams Notifications
 
@@ -142,7 +139,7 @@ src/
 │   │   └── WipeMonitorBackgroundService.cs
 │   └── Components/Pages/         # Dashboard, Approvals, History, Status
 │
-├── Intune.WipeMonitor.Agent/     # Agent On-Prem — DA RIDEPLOYARE
+├── Intune.WipeMonitor.Agent/     # Agent On-Prem — DEPLOYED su HVHOST
 │   ├── CleanupAgentWorker.cs     # SignalR client + X-Api-Key header
 │   ├── AgentSettings.cs          # Config con ApiKey
 │   └── Services/                 # AD (LDAP) + SCCM (AdminService)
@@ -163,7 +160,7 @@ src/
 
 ## Note per la prossima sessione
 
-- Dopo aver aggiornato l'agent, testare un ciclo completo: approvazione → cleanup → Teams notification
+- Configurare AD Server e SCCM AdminServiceUrl nell'agent, poi testare ciclo completo
+- Testare: approvazione → cleanup → Teams notification → log CMTrace
 - Considerare auto-update dell'agent (endpoint `/api/agent/update` che serve lo zip)
-- Il SESSION-HANDOFF.md nella root del repo è la v1 — questa è la v2 aggiornata
 
