@@ -67,7 +67,11 @@ public class CleanupAgentWorker : BackgroundService
     private async Task ConnectAndRunAsync(CancellationToken stoppingToken)
     {
         _connection = new HubConnectionBuilder()
-            .WithUrl(_settings.HubUrl)
+            .WithUrl(_settings.HubUrl, options =>
+            {
+                if (!string.IsNullOrEmpty(_settings.ApiKey))
+                    options.Headers.Add("X-Api-Key", _settings.ApiKey);
+            })
             .WithAutomaticReconnect()
             .Build();
 

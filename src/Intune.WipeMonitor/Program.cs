@@ -81,8 +81,9 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("WipeMonitorAdmin", policy =>
         policy.RequireRole("WipeMonitor-Admin"));
-    options.AddPolicy("AgentApiKey", policy =>
-        policy.RequireAuthenticatedUser());
+    options.AddPolicy("AgentOrUser", policy =>
+        policy.AddAuthenticationSchemes("AgentApiKey", "OpenIdConnect")
+              .RequireAuthenticatedUser());
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
@@ -178,7 +179,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapControllers(); // For Microsoft Identity UI sign-in/sign-out
 
-app.MapHub<CleanupHub>("/hub/cleanup");
+app.MapHub<CleanupHub>("/hub/cleanup").RequireAuthorization("AgentOrUser");
 
 Log.Information("[STARTUP] Pipeline ready, starting server...");
 app.Run();

@@ -13,6 +13,9 @@ public class AgentSettings
     /// <summary>URL del SignalR Hub (es. https://intune-wipemonitor-app.azurewebsites.net/hub/cleanup).</summary>
     public string HubUrl { get; set; } = string.Empty;
 
+    /// <summary>API Key per l'autenticazione al SignalR Hub.</summary>
+    public string? ApiKey { get; set; }
+
     /// <summary>Intervallo heartbeat in secondi.</summary>
     public int HeartbeatIntervalSeconds { get; set; } = 60;
 
