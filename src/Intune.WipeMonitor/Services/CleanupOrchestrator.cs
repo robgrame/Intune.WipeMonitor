@@ -68,8 +68,11 @@ public class CleanupOrchestrator
             return;
         }
 
-        // Verifica che almeno un agent sia connesso
-        var activeAgent = CleanupHub.ConnectedAgents.Values.FirstOrDefault(a => a.IsAlive);
+        // Verifica che almeno un agent sia connesso — preferisci quello con AD e SCCM raggiungibili
+        var activeAgent = CleanupHub.ConnectedAgents.Values
+            .Where(a => a.IsAlive)
+            .OrderByDescending(a => a.CanReachAD && a.CanReachSccm)
+            .FirstOrDefault();
         if (activeAgent is null)
         {
             _logger.LogError("Nessun agent on-prem connesso. Impossibile eseguire cleanup per {DeviceName}",
