@@ -1,258 +1,169 @@
-# Intune Wipe Monitor — Session Handoff
+# Intune Wipe Monitor — Session Handoff v2
 
 > Documento per riprendere la sessione su un'altra macchina con GitHub Copilot CLI.
-> Generato il: 2026-03-25T15:13 UTC
+> Generato il: 2026-03-26T10:11 UTC
 
 ---
 
-## Stato attuale del progetto
+## Stato attuale — Cosa funziona
 
-La **web app Blazor** è deployata e funzionante su Azure. Il **polling Graph API** recupera correttamente le azioni di wipe da Intune. Manca il **deploy dell'agent on-prem** (Windows Service) che si connette al SignalR Hub per eseguire il cleanup su AD e SCCM.
+| Componente | Stato | Note |
+|---|---|---|
+| **Web App Blazor** | ✅ Live | https://intune-wipemonitor-app.azurewebsites.net |
+| **Entra ID Auth** | ✅ | Ruolo WipeMonitor-Admin richiesto |
+| **Graph API Polling** | ✅ | 10 wipe actions recuperate ogni 60 min |
+| **Autopilot Cleanup** | ✅ | Primo step cleanup via Graph API |
+| **SignalR Hub** | ✅ | `/hub/cleanup` con API key auth |
+| **Teams Notifications** | ✅ | Adaptive Card via Power Automate webhook |
+| **Azure SQL → SQLite** | ✅ | `/home/wipemonitor.db` persistente |
+| **Key Vault** | ✅ | Private endpoint, Graph secret |
+| **App Configuration** | ✅ | Private endpoint, tutte le config |
+| **App Insights** | ✅ | Custom events per audit |
+| **Serilog + CMTrace** | ✅ | File log format CMTrace |
+| **IaC Bicep** | ✅ | `Deploy/main.bicep` + `Deploy-Infrastructure.ps1` |
+| **Security hardening** | ✅ | HTTPS-only, TLS 1.2, LDAP/OData injection fixes |
 
-### ✅ Completato
+## ❌ Azione richiesta ORA: Aggiornare l'Agent on-prem
 
-| Componente | Stato |
-|---|---|
-| Web App Blazor (Dashboard, Approvazioni, Storico) | ✅ Deployed e funzionante |
-| Graph API Polling (remoteActionAudits/factoryReset) | ✅ 10 wipe actions recuperate |
-| SignalR Hub (`/hub/cleanup`) | ✅ Endpoint attivo, pronto per agent |
-| Azure SQL Server (Managed Identity, private endpoint) | ✅ Schema creato |
-| Key Vault (Graph client secret, private endpoint) | ✅ |
-| App Configuration (private endpoint, KV references) | ✅ |
-| Application Insights (custom events) | ✅ |
-| VNet + Private Endpoints (KV, AppConfig, SQL) | ✅ |
-| Serilog + CMTrace formatter | ✅ |
-| Startup banner con versione e config | ✅ |
-| App Registration con Graph permissions | ✅ |
-| README con badges, push su GitHub | ✅ |
+L'agent ha un errore di negoziazione SignalR perché il server ora richiede API key auth. L'agent va ricompilato e rideployato sulla VM.
 
-### ❌ Da completare
+### Passi:
 
-| Componente | Descrizione |
-|---|---|
-| **Agent On-Prem** | Compilare e deployare `Intune.WipeMonitor.Agent` come Windows Service su una VM on-prem |
-| **Configurare Agent** | Impostare `appsettings.json` con connessione AD, SCCM, SignalR Hub URL |
-| **Test E2E** | Approvare un cleanup dalla dashboard e verificare che l'agent elimini da AD/SCCM |
-| **Serilog Agent** | Verificare che i log CMTrace funzionino anche sull'agent |
+```powershell
+# 1. Pull the latest code
+cd C:\path\to\Intune.WipeMonitor
+git pull
+
+# 2. Edit appsettings.json — add ApiKey to Agent section
+# File: src/Intune.WipeMonitor.Agent/appsettings.json
+```
+
+Aggiungere `ApiKey` nella sezione Agent:
+```json
+{
+  "Agent": {
+    "AgentId": "YOURNAME",
+    "HubUrl": "https://intune-wipemonitor-app.azurewebsites.net/hub/cleanup",
+    "ApiKey": "1wpaDNk3u1dwzIfu3SKIomilG+50LZm7MozTALRnlYk=",
+    "HeartbeatIntervalSeconds": 60,
+    "ActiveDirectory": { ... },
+    "Sccm": { ... }
+  }
+}
+```
+
+```powershell
+# 3. Publish
+cd src\Intune.WipeMonitor.Agent
+dotnet publish -c Release -o C:\Services\WipeMonitor.Agent
+
+# 4. Restart service
+sc.exe stop "Intune.WipeMonitor.Agent"
+sc.exe start "Intune.WipeMonitor.Agent"
+
+# 5. Verify in logs: should see "Connesso al Hub" without negotiation errors
+```
+
+### Dopo il restart, verificare:
+- Nei log CMTrace dell'agent: `Agent registrato al Hub come YOURNAME`
+- Nella dashboard web: pagina **Stato Servizi** mostra LED verde per Gateway
+- Nella pagina **Dashboard**: barra infrastruttura mostra Gateway/AD/SCCM con LED
 
 ---
 
 ## Architettura
 
 ```
-┌─────────────────────────── AZURE ───────────────────────────┐
-│  Web App (Blazor Server)                                    │
-│  ├── Dashboard UI (https://intune-wipemonitor-app...)        │
-│  ├── Graph API Polling (ogni 60 min)                        │
-│  ├── SignalR Hub (/hub/cleanup)  ◄──── WSS ────┐            │
-│  ├── Azure SQL (wipemonitor-sql, private EP)    │            │
-│  ├── Key Vault (wipemonitor-kv, private EP)     │            │
-│  ├── App Config (wipemonitor-appconfig, priv EP)│            │
-│  └── App Insights (wipemonitor-insights)        │            │
-└─────────────────────────────────────────────────┼────────────┘
-                                                  │
-┌─────────────────── ON-PREMISES ─────────────────┼────────────┐
-│  Agent (Windows Service)                        │            │
-│  ├── SignalR Client ────────────────────────────┘            │
-│  ├── AD Cleanup (LDAP, System.DirectoryServices.Protocols)   │
-│  ├── SCCM Cleanup (AdminService REST API)                    │
-│  └── App Insights (stessi custom events)                     │
-└──────────────────────────────────────────────────────────────┘
-```
+CLEANUP PIPELINE (4 step in sequenza dopo approvazione):
 
----
+① Autopilot   → Graph API DELETE windowsAutopilotDeviceIdentities (cloud)
+② AD          → SignalR → Agent → LDAP Delete computer object (on-prem)
+③ SCCM        → SignalR → Agent → AdminService REST DELETE (on-prem)
+④ Intune       → Graph API DELETE managedDevices (cloud)
+   Entra ID   → Automatico dopo AD sync
+```
 
 ## Risorse Azure (IntuneWipeMonitor-RG, westus2)
 
 | Risorsa | Nome | Note |
 |---|---|---|
-| App Service Plan | `wipemonitor-plan` | B1 Linux |
-| Web App | `intune-wipemonitor-app` | .NET 10, Managed Identity |
-| SQL Server | `wipemonitor-sql` | Entra-only auth, private EP |
-| SQL Database | `wipemonitor-db` | Basic 5 DTU |
-| Key Vault | `wipemonitor-kv` | RBAC, private EP |
-| App Configuration | `wipemonitor-appconfig` | Standard, private EP |
-| Application Insights | `wipemonitor-insights` | Conn string sotto |
+| App Service | `intune-wipemonitor-app` | .NET 10, Managed Identity, HTTPS-only, TLS 1.2 |
+| Key Vault | `wipemonitor-kv` | Private endpoint, RBAC |
+| App Configuration | `wipemonitor-appconfig` | Private endpoint |
+| Application Insights | `wipemonitor-insights` | Custom events |
 | VNet | `wipemonitor-vnet` | 10.0.0.0/16 |
-| Subnet webapp | `snet-webapp` | 10.0.1.0/24 (delegated) |
-| Subnet PE | `snet-privateendpoints` | 10.0.2.0/24 |
 
-### App Registration
+### App Registrations
 
-| Campo | Valore |
-|---|---|
-| Nome | `Intune.WipeMonitor` |
-| Client ID | `f3baa699-2f8c-46e0-8e99-925fddb69030` |
-| Object ID (app) | `50b1ce5d-541e-4b49-9329-a66df031d552` |
-| SP Object ID | `8ee1113e-8471-436d-bc5f-52ecac5c12f3` |
-| Tenant ID | `d6dbad84-5922-4700-a049-c7068c37c884` |
-| Subscription | `74c8c33a-f447-4f1e-890c-f6f71833c8be` |
-| Permessi | `DeviceManagementManagedDevices.ReadWrite.All`, `DeviceManagementRBAC.Read.All` (Application) |
-
-### Application Insights Connection String
-
-```
-InstrumentationKey=38846ce6-422a-4112-b3b0-b7be7b1caece;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=5e062894-bda8-460b-aec6-666143e072f3
-```
-
----
-
-## GitHub Repo
-
-- **URL**: https://github.com/robgrame/Intune.WipeMonitor
-- **Branch**: `master`
-
-### Struttura progetto
-
-```
-src/
-├── Intune.WipeMonitor/            # Web App (Blazor Server) — DEPLOYED
-│   ├── Program.cs                 # Startup: Serilog, App Config, EF Core, SignalR
-│   ├── Hubs/CleanupHub.cs         # SignalR Hub (gateway verso agent)
-│   ├── Services/
-│   │   ├── GraphWipeMonitorService.cs   # Polling Graph API
-│   │   ├── CleanupOrchestrator.cs       # Orchestrazione cleanup via SignalR
-│   │   ├── CleanupTelemetryService.cs   # Custom events App Insights
-│   │   └── WipeMonitorBackgroundService.cs
-│   ├── Components/Pages/          # Blazor: Dashboard, Approvals, History
-│   ├── Data/AppDbContext.cs        # EF Core (SQL Server)
-│   └── Models/                     # DeviceCleanupRecord, Settings, WipeAction
-│
-├── Intune.WipeMonitor.Agent/      # Agent On-Prem — DA DEPLOYARE
-│   ├── Program.cs                 # Startup: Serilog, App Insights, SignalR client
-│   ├── CleanupAgentWorker.cs      # Worker: connessione Hub, handler AD/SCCM
-│   ├── AgentSettings.cs           # Config: Hub URL, AD, SCCM
-│   ├── Services/
-│   │   ├── ActiveDirectoryService.cs  # LDAP delete computer
-│   │   └── SccmService.cs            # AdminService REST delete
-│   └── appsettings.json           # Template configurazione
-│
-└── Intune.WipeMonitor.Shared/     # Modelli condivisi
-    ├── Enums.cs                   # CleanupStatus, StepResult, CleanupTarget
-    ├── HubContracts.cs            # ICleanupAgentClient, ICleanupHub, CleanupCommand
-    ├── TelemetryEvents.cs         # Nomi eventi App Insights
-    └── Logging/
-        ├── CMTraceFormatter.cs    # Serilog formatter stile SCCM
-        └── StartupBanner.cs       # Banner ASCII + config dump
-```
-
----
-
-## Prossimi step: Deploy Agent On-Prem
-
-### 1. Clona il repo sulla VM
-
-```powershell
-git clone https://github.com/robgrame/Intune.WipeMonitor.git
-cd Intune.WipeMonitor
-```
-
-### 2. Configura `appsettings.json` dell'agent
-
-File: `src/Intune.WipeMonitor.Agent/appsettings.json`
-
-```json
-{
-  "ApplicationInsights": {
-    "ConnectionString": "InstrumentationKey=38846ce6-422a-4112-b3b0-b7be7b1caece;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=5e062894-bda8-460b-aec6-666143e072f3"
-  },
-  "Agent": {
-    "AgentId": "AGENT-01",
-    "HubUrl": "https://intune-wipemonitor-app.azurewebsites.net/hub/cleanup",
-    "HeartbeatIntervalSeconds": 60,
-    "ActiveDirectory": {
-      "Server": "<DC_HOSTNAME>",
-      "SearchBase": "<DC=domain,DC=com>",
-      "Port": 389
-    },
-    "Sccm": {
-      "AdminServiceUrl": "https://<SCCM_SERVER>/AdminService"
-    }
-  }
-}
-```
-
-### 3. Pubblica e installa come Windows Service
-
-```powershell
-cd src\Intune.WipeMonitor.Agent
-dotnet publish -c Release -o C:\Services\WipeMonitor.Agent
-
-# Installa come Windows Service
-sc.exe create "Intune.WipeMonitor.Agent" binpath="C:\Services\WipeMonitor.Agent\Intune.WipeMonitor.Agent.exe"
-sc.exe config "Intune.WipeMonitor.Agent" start=auto
-sc.exe start "Intune.WipeMonitor.Agent"
-```
-
-### 4. Verifica
-
-- Nella dashboard Blazor, sezione "Agent On-Premises" deve mostrare l'agent come **Online**
-- Nei log CMTrace: `logs/wipemonitor-agent-YYYYMMDD.log`
-- In App Insights: evento `Agent.Connected`
-
-### 5. Test E2E
-
-1. Dalla dashboard, vai su **Approvazioni**
-2. Seleziona un device con wipe "done"
-3. Clicca **Approva Cleanup**
-4. L'orchestratore invia il comando all'agent via SignalR
-5. L'agent esegue:
-   - `RemoveFromActiveDirectory` → LDAP delete
-   - `RemoveFromSccm` → AdminService DELETE
-6. Il risultato torna al Hub e aggiorna il DB
-7. App Insights mostra `DeviceCleanup.ADDeletion` e `DeviceCleanup.SCCMDeletion`
-
----
-
-## Protocollo SignalR (Hub ↔ Agent)
-
-### Hub → Agent (server invoca metodi sul client)
-
-| Metodo | Parametro | Ritorno | Quando |
-|---|---|---|---|
-| `RemoveFromActiveDirectory` | `CleanupCommand` | `CleanupStepResult` | Cleanup approvato |
-| `RemoveFromSccm` | `CleanupCommand` | `CleanupStepResult` | Cleanup approvato |
-| `Ping` | — | `AgentStatus` | Health check |
-
-### Agent → Hub (client invoca metodi sul server)
-
-| Metodo | Parametri | Quando |
+| App | Client ID | Scopo |
 |---|---|---|
-| `RegisterAgent` | `AgentRegistration` | Connessione iniziale |
-| `Heartbeat` | `agentId` | Ogni 60s |
-| `ReportStepCompleted` | `wipeActionId, target, result` | Dopo ogni step |
+| `Intune.WipeMonitor` | `f3baa699-2f8c-46e0-8e99-925fddb69030` | Graph API (wipe polling, Autopilot/Intune delete) |
+| `Intune.WipeMonitor.Portal` | `42c85dd0-f652-459f-bf41-caf7ec741c00` | Dashboard auth (Entra ID + WipeMonitor-Admin role) |
 
----
+### Tenant & Subscription
+- Tenant: `d6dbad84-5922-4700-a049-c7068c37c884`
+- Subscription: `74c8c33a-f447-4f1e-890c-f6f71833c8be`
 
-## Custom Events App Insights (KQL)
+## SignalR Auth
 
-```kql
-// Tutti gli eventi di cleanup nelle ultime 24h
-customEvents
-| where name startswith "DeviceCleanup"
-| where timestamp > ago(24h)
-| project timestamp, name,
-    DeviceName = tostring(customDimensions.DeviceName),
-    Result = tostring(customDimensions.Result),
-    Error = tostring(customDimensions.ErrorMessage)
-| order by timestamp desc
+Il Hub usa una policy `AgentOrUser` che accetta:
+- **OpenIdConnect** (Entra ID) — per browser/dashboard
+- **AgentApiKey** — per l'agent on-prem, via header `X-Api-Key` o query `?api_key=`
 
-// Stato agent
-customEvents
-| where name startswith "Agent."
-| project timestamp, name,
-    AgentId = tostring(customDimensions.AgentId),
-    Machine = tostring(customDimensions.AgentMachine)
-| order by timestamp desc
+API Key corrente: `1wpaDNk3u1dwzIfu3SKIomilG+50LZm7MozTALRnlYk=`
+Configurata in: `WipeMonitor:AgentApiKey` (App Settings sul Web App)
+
+## Teams Notifications
+
+- **Canale**: Device Lifecycle (Team ID: `92eca928-359a-4832-8084-cfb13daa43ce`)
+- **Metodo**: Power Automate Workflows webhook (Adaptive Card)
+- **Webhook URL**: configurato in `WipeMonitor__TeamsWebhookUrl` app setting
+- **Test OK**: notifica arrivata nel canale ✅
+- **Eventi**: approvazione richiesta + risultato cleanup
+
+## Struttura progetto
+
+```
+Deploy/
+├── main.bicep                    # IaC infrastruttura Azure
+├── main.parameters.json          # Parametri Bicep
+├── Deploy-Infrastructure.ps1     # Provisioning end-to-end
+└── Export-DeviceActions.ps1      # Export wipe actions (Device Code Flow)
+
+src/
+├── Intune.WipeMonitor/           # Web App (Blazor Server) — DEPLOYED
+│   ├── Auth/AgentApiKeyAuthHandler.cs  # API key auth per agent
+│   ├── Hubs/CleanupHub.cs        # SignalR Hub
+│   ├── Services/
+│   │   ├── GraphWipeMonitorService.cs  # Polling + Autopilot/Intune delete
+│   │   ├── CleanupOrchestrator.cs      # Pipeline 4 step
+│   │   ├── CleanupTelemetryService.cs  # App Insights events
+│   │   ├── TeamsNotificationService.cs # Adaptive Card webhook
+│   │   └── WipeMonitorBackgroundService.cs
+│   └── Components/Pages/         # Dashboard, Approvals, History, Status
+│
+├── Intune.WipeMonitor.Agent/     # Agent On-Prem — DA RIDEPLOYARE
+│   ├── CleanupAgentWorker.cs     # SignalR client + X-Api-Key header
+│   ├── AgentSettings.cs          # Config con ApiKey
+│   └── Services/                 # AD (LDAP) + SCCM (AdminService)
+│
+└── Intune.WipeMonitor.Shared/    # Modelli, contratti, CMTrace formatter
 ```
 
----
+## Problemi risolti in questa sessione
 
-## Note tecniche
+1. **Serilog crash startup** → Usare `(context, configuration)` callback senza `services`
+2. **SQLite DateTimeOffset ORDER BY** → Migrato a Azure SQL → poi tornato a SQLite con converter
+3. **App Config private endpoint DNS** → `WEBSITE_DNS_SERVER=168.63.129.16`
+4. **SignalR typed hub non supporta client results** → `IHubContext<CleanupHub>` con `InvokeAsync<T>`
+5. **SignalR AllowAnonymous** → Sostituito con API key auth `AgentOrUser` policy
+6. **OData injection SCCM/Autopilot** → `Uri.EscapeDataString` + `Guid.TryParse`
+7. **Graph 401** → Service Principal mancante + wrong permission IDs
+8. **ChannelMessage.Send non esiste come Application** → Webhook approach
 
-- Il web app **non** ha configurazione AD/SCCM — queste sono solo nell'agent
-- L'agent si connette in **uscita** (WSS) al Hub — nessuna regola firewall inbound necessaria
-- Il secret Graph è in Key Vault (`Graph--ClientSecret`) e anche come App Setting (`Graph__ClientSecret`) come fallback
-- L'App Config SDK ha un timeout di 20s allo startup con fallback graceful
-- Il DB schema viene creato in background (non blocca lo startup)
-- Serilog usa `builder.Host.UseSerilog((context, configuration) => ...)` — senza callback `services` per evitare crash allo startup
+## Note per la prossima sessione
+
+- Dopo aver aggiornato l'agent, testare un ciclo completo: approvazione → cleanup → Teams notification
+- Considerare auto-update dell'agent (endpoint `/api/agent/update` che serve lo zip)
+- Il SESSION-HANDOFF.md nella root del repo è la v1 — questa è la v2 aggiornata
+
