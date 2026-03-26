@@ -15,26 +15,9 @@ Monitors Microsoft Intune for completed device wipe operations and orchestrates 
 
 ## Architecture
 
-> 📐 Full Mermaid diagrams: [docs/architecture.md](docs/architecture.md)
+![Architecture](images/architecture.png)
 
-```
-┌───────────────────────── AZURE ─────────────────────────┐
-│  Web App (Blazor Server + Entra ID Auth)                │
-│  ├── Graph API Polling (wipe actions, every 60 min)     │
-│  ├── Autopilot Cleanup (Graph API delete)               │
-│  ├── Intune Cleanup (Graph API delete)                  │
-│  ├── SignalR Hub → Gateway Agent (AD + SCCM cleanup)    │
-│  ├── Teams Webhook (Adaptive Cards notifications)       │
-│  ├── Key Vault + App Config (private endpoints)         │
-│  └── Application Insights (custom events + telemetry)   │
-└──────────────────────────┬──────────────────────────────┘
-                           │ SignalR (WSS outbound)
-┌──────────────────────────┴──────────────────────────────┐
-│  ON-PREMISES — Gateway Agent (Windows Service)          │
-│  ├── Active Directory Cleanup (LDAP + SID validation)   │
-│  └── SCCM Cleanup (AdminService REST)                   │
-└─────────────────────────────────────────────────────────┘
-```
+> 📐 Mermaid diagrams and sequence flow: [docs/architecture.md](docs/architecture.md)
 
 ## How It Works
 
