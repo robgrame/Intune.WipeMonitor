@@ -77,6 +77,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   properties: {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: true
   }
 }
 
@@ -105,24 +106,53 @@ resource funcApp 'Microsoft.Web/sites@2023-12-01' = {
       minTlsVersion: '1.2'
       netFrameworkVersion: 'v10.0'
       appSettings: [
-        { name: 'AzureWebJobsStorage'; value: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};EndpointSuffix=core.windows.net;AccountKey=${storage.listKeys().keys[0].value}' }
-        { name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'; value: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};EndpointSuffix=core.windows.net;AccountKey=${storage.listKeys().keys[0].value}' }
-        { name: 'WEBSITE_CONTENTSHARE'; value: toLower(names.funcApp) }
-        { name: 'FUNCTIONS_EXTENSION_VERSION'; value: '~4' }
-        { name: 'FUNCTIONS_WORKER_RUNTIME'; value: 'dotnet-isolated' }
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'; value: appInsights.properties.ConnectionString }
-        // Graph settings
-        { name: 'Graph__TenantId'; value: graphTenantId }
-        { name: 'Graph__ClientId'; value: graphClientId }
-        { name: 'Graph__ClientSecret'; value: graphClientSecret }
-        // Report settings
-        { name: 'Report__SharePointSiteId'; value: sharePointSiteId }
-        { name: 'Report__SharePointDriveId'; value: sharePointDriveId }
-        { name: 'Report__SharePointFolderPath'; value: sharePointFolderPath }
-        { name: 'Report__TeamsWebhookUrl'; value: teamsWebhookUrl }
-        { name: 'Report__ReportDays'; value: string(reportDays) }
+        { name: 'AzureWebJobsStorage__accountName', value: storage.name }
+        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
+        { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'dotnet-isolated' }
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
+        { name: 'Graph__TenantId', value: graphTenantId }
+        { name: 'Graph__ClientId', value: graphClientId }
+        { name: 'Graph__ClientSecret', value: graphClientSecret }
+        { name: 'Report__SharePointSiteId', value: sharePointSiteId }
+        { name: 'Report__SharePointDriveId', value: sharePointDriveId }
+        { name: 'Report__SharePointFolderPath', value: sharePointFolderPath }
+        { name: 'Report__TeamsWebhookUrl', value: teamsWebhookUrl }
+        { name: 'Report__ReportDays', value: string(reportDays) }
       ]
     }
+  }
+}
+
+// Storage Blob Data Owner role for Function App Managed Identity
+resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, funcApp.id, 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+  scope: storage
+  properties: {
+    principalId: funcApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b')
+  }
+}
+
+// Storage Account Contributor role for Function App (file shares for consumption plan)
+resource storageContribRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, funcApp.id, '17d1049b-9a84-46fb-8f53-869881c3d3ab')
+  scope: storage
+  properties: {
+    principalId: funcApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab')
+  }
+}
+
+// Storage Queue Data Contributor for Function App (triggers)
+resource storageQueueRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, funcApp.id, '974c5e8b-45b9-4653-ba55-5f855dd0fb88')
+  scope: storage
+  properties: {
+    principalId: funcApp.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')
   }
 }
 
