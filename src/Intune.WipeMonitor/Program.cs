@@ -95,25 +95,6 @@ builder.Services.AddAuthentication()
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentApiKeyAuthHandler>(
         "AgentApiKey", null);
 
-// Suppress OIDC login redirect for hub endpoints — return 401 instead of HTML login page.
-// Without this, when AgentApiKey returns NoResult the cookie middleware issues a challenge
-// that redirects to Entra ID, causing "Invalid negotiation response" on the SignalR client.
-builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(
-    Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, options =>
-{
-    var existingRedirect = options.Events?.OnRedirectToLogin;
-    options.Events ??= new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents();
-    options.Events.OnRedirectToLogin = context =>
-    {
-        if (context.Request.Path.StartsWithSegments("/hub"))
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        }
-        return existingRedirect?.Invoke(context) ?? Task.CompletedTask;
-    };
-});
-
 // Configuration binding(solo config pertinente al web app — AD e SCCM sono gestiti dall'agent on-prem)
 builder.Services.Configure<WipeMonitorSettings>(
     builder.Configuration.GetSection(WipeMonitorSettings.SectionName));
@@ -190,6 +171,25 @@ if (appConfigLoaded)
 app.UseStatusCodePagesWithRedirects("/not-found");
 app.UseHttpsRedirection();
 app.UseAntiforgery();
+
+// For /hub/* paths: try AgentApiKey auth first. If it fails, return 401 (not OIDC redirect).
+// This prevents SignalR clients from receiving an HTML login page during negotiate/reconnect.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/hub"))
+    {
+        var authResult = await context.RequestServices
+            .GetRequiredService<Microsoft.AspNetCore.Authentication.IAuthenticationService>()
+            .AuthenticateAsync(context, "AgentApiKey");
+
+        if (authResult.Succeeded)
+        {
+            context.User = authResult.Principal!;
+        }
+    }
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
