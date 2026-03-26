@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "Graph__TenantId": "",
+    "Graph__ClientId": "",
+    "Graph__ClientSecret": "",
+    "Report__SharePointSiteId": "",
+    "Report__SharePointDriveId": "",
+    "Report__SharePointFolderPath": "WipeMonitor Reports",
+    "Report__TeamsWebhookUrl": "",
+    "Report__ReportDays": "30"
+  }
+}
