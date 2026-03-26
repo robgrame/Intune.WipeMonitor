@@ -68,7 +68,7 @@ public class WipeReportFunction
 
         // 2. Genera Excel
         byte[] excelBytes;
-        var fileName = $"WipeReport_{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+        var fileName = $"WipeReport_{DateTime.UtcNow:yyyy-MM-dd_HHmmss}.xlsx";
         try
         {
             excelBytes = _excelBuilder.Build(entries, _settings.ReportDays);

@@ -40,7 +40,9 @@ public class ExcelReportBuilder
 
         // Header
         var headers = new[] { "Device Name", "Wipe Requested", "Wipe Completed", "State",
-            "Initiated By", "Entra Present", "OS", "Trust Type", "Last Entra Sign-In", "Entra Enabled" };
+            "Initiated By", "User", "Serial Number", "OS", "OS Version",
+            "Entra Present", "Entra Device ID", "Trust Type", "Last Entra Sign-In", "Entra Enabled",
+            "Intune Present", "Managed Device ID" };
         for (int i = 0; i < headers.Length; i++)
             ws.Cell(1, i + 1).Value = headers[i];
 
@@ -55,13 +57,18 @@ public class ExcelReportBuilder
             ws.Cell(row, 3).Value = e.WipeCompletedAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "";
             ws.Cell(row, 4).Value = e.ActionState;
             ws.Cell(row, 5).Value = e.InitiatedBy;
-            ws.Cell(row, 6).Value = e.EntraDeviceFound ? "Yes" : "No";
-            ws.Cell(row, 7).Value = e.OperatingSystem ?? "";
-            ws.Cell(row, 8).Value = e.TrustType ?? "";
-            ws.Cell(row, 9).Value = e.EntraLastSignIn?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "";
-            ws.Cell(row, 10).Value = e.EntraAccountEnabled?.ToString() ?? "";
+            ws.Cell(row, 6).Value = e.IntuneUser ?? "";
+            ws.Cell(row, 7).Value = e.IntuneSerialNumber ?? "";
+            ws.Cell(row, 8).Value = e.OperatingSystem ?? "";
+            ws.Cell(row, 9).Value = e.OperatingSystemVersion ?? "";
+            ws.Cell(row, 10).Value = e.EntraDeviceFound ? "Yes" : "No";
+            ws.Cell(row, 11).Value = e.EntraDeviceId ?? "";
+            ws.Cell(row, 12).Value = e.TrustType ?? "";
+            ws.Cell(row, 13).Value = e.EntraLastSignIn?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "";
+            ws.Cell(row, 14).Value = e.EntraAccountEnabled?.ToString() ?? "";
+            ws.Cell(row, 15).Value = e.IntuneDeviceFound ? "Yes" : "No";
+            ws.Cell(row, 16).Value = e.ManagedDeviceId;
 
-            // Evidenzia: Entra ancora presente su wipe completato
             if (e.IsEntraPending)
                 ws.Row(row).Style.Fill.BackgroundColor = XLColor.LightYellow;
 

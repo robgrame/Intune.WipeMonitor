@@ -13,6 +13,12 @@ public class WipeReportEntry
     public DateTimeOffset? WipeCompletedAt { get; set; }
     public string InitiatedBy { get; set; } = string.Empty;
 
+    // Dati da Intune managed device (arricchimento)
+    public bool IntuneDeviceFound { get; set; }
+    public string? AzureADDeviceId { get; set; }
+    public string? IntuneUser { get; set; }
+    public string? IntuneSerialNumber { get; set; }
+
     // Dati da Entra ID (Graph /devices)
     public bool EntraDeviceFound { get; set; }
     public string? EntraDeviceId { get; set; }
@@ -39,7 +45,7 @@ public class GraphPagedResponse<T>
 public class WipeActionDto
 {
     public string Id { get; set; } = string.Empty;
-    public string DeviceName { get; set; } = string.Empty;
+    public string DeviceDisplayName { get; set; } = string.Empty;
     public string ManagedDeviceId { get; set; } = string.Empty;
     public string ActionState { get; set; } = string.Empty;
     public DateTimeOffset? RequestDateTime { get; set; }
@@ -52,9 +58,22 @@ public class EntraDeviceDto
 {
     public string Id { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
+    public string? DeviceId { get; set; }
     public string? OperatingSystem { get; set; }
     public string? OperatingSystemVersion { get; set; }
     public string? TrustType { get; set; }
     public bool AccountEnabled { get; set; }
     public DateTimeOffset? ApproximateLastSignInDateTime { get; set; }
+}
+
+/// <summary>Managed device da Intune.</summary>
+public class ManagedDeviceDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string? DeviceName { get; set; }
+    public string? AzureADDeviceId { get; set; }
+    public string? SerialNumber { get; set; }
+    public string? OperatingSystem { get; set; }
+    public string? OsVersion { get; set; }
+    public string? UserPrincipalName { get; set; }
 }
