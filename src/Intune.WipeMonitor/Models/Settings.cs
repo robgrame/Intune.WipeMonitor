@@ -15,6 +15,12 @@ public class WipeMonitorSettings
 
     /// <summary>Elimina anche l'oggetto da Intune dopo il wipe (opzionale).</summary>
     public bool CleanupIntune { get; set; } = true;
+
+    /// <summary>Teams Incoming Webhook URL per notifiche. Se vuoto, notifiche disabilitate.</summary>
+    public string? TeamsWebhookUrl { get; set; }
+
+    /// <summary>URL base della dashboard (per i link nelle notifiche Teams).</summary>
+    public string? DashboardUrl { get; set; }
 }
 
 public class GraphSettings

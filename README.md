@@ -11,39 +11,29 @@
 
 **Automated device lifecycle management after Intune wipe (factory reset) actions.**
 
-Monitors Microsoft Intune for completed device wipe operations and orchestrates the cleanup of device objects from Active Directory, SCCM, and Intune — ensuring no device is removed until the wipe is confirmed as done.
+Monitors Microsoft Intune for completed device wipe operations and orchestrates the cleanup of device objects from Autopilot, Active Directory, SCCM, and Intune — ensuring no device is removed until the wipe is confirmed as done. Sends Teams notifications for approval requests.
 
 ## Architecture
 
+> 📐 Full Mermaid diagrams: [docs/architecture.md](docs/architecture.md)
+
 ```
-┌─────────────────────────────────────────────────────┐
-│                    AZURE                            │
-│                                                     │
-│  ┌──────────────────────────────────────────────┐   │
-│  │  Web App (Blazor Server)                     │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌─────────────┐  │   │
-│  │  │Dashboard │ │Graph API │ │ SignalR Hub  │  │   │
-│  │  │   UI     │ │ Polling  │ │  (Gateway)  │  │   │
-│  │  └──────────┘ └──────────┘ └──────┬──────┘  │   │
-│  └───────────────────────────────────┼──────────┘   │
-│       │              │               │              │
-│  ┌────┴────┐  ┌──────┴─────┐   ┌────┴──────┐       │
-│  │App      │  │ Key Vault  │   │   App     │       │
-│  │Config   │  │ (secrets)  │   │  Insights │       │
-│  └─────────┘  └────────────┘   └───────────┘       │
-│     VNet + Private Endpoints        │               │
-└─────────────────────────────────────┼───────────────┘
-                                      │ SignalR (WSS)
-┌─────────────────────────────────────┼───────────────┐
-│                ON-PREMISES          │               │
-│  ┌──────────────────────────────────┴────────────┐  │
-│  │  Agent (Windows Service)                      │  │
-│  │  ┌────────────────┐  ┌─────────────────────┐  │  │
-│  │  │ AD Cleanup     │  │ SCCM Cleanup        │  │  │
-│  │  │ (LDAP)         │  │ (AdminService REST) │  │  │
-│  │  └────────────────┘  └─────────────────────┘  │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────── AZURE ─────────────────────────┐
+│  Web App (Blazor Server + Entra ID Auth)                │
+│  ├── Graph API Polling (wipe actions, every 60 min)     │
+│  ├── Autopilot Cleanup (Graph API delete)               │
+│  ├── Intune Cleanup (Graph API delete)                  │
+│  ├── SignalR Hub → Gateway Agent (AD + SCCM cleanup)    │
+│  ├── Teams Webhook (Adaptive Cards notifications)       │
+│  ├── Key Vault + App Config (private endpoints)         │
+│  └── Application Insights (custom events + telemetry)   │
+└──────────────────────────┬──────────────────────────────┘
+                           │ SignalR (WSS outbound)
+┌──────────────────────────┴──────────────────────────────┐
+│  ON-PREMISES — Gateway Agent (Windows Service)          │
+│  ├── Active Directory Cleanup (LDAP + SID validation)   │
+│  └── SCCM Cleanup (AdminService REST)                   │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## How It Works
@@ -53,18 +43,21 @@ Monitors Microsoft Intune for completed device wipe operations and orchestrates 
    GET /beta/deviceManagement/remoteActionAudits?$filter=action eq 'factoryReset'
    ```
 2. **Detection** — Devices with `actionState == "done"` are flagged as ready for cleanup
-3. **Approval** — An operator reviews and approves the cleanup from the Blazor dashboard
-4. **SID Cross-Validation** — Before any deletion, the agent validates the device identity across all systems:
+3. **Notification** — A Teams Adaptive Card is sent to the configured channel with device details and an "Approve" button
+4. **Approval** — An operator reviews and approves the cleanup from the Blazor dashboard (Entra ID auth required)
+5. **SID Cross-Validation** — Before any deletion, the agent validates the device identity across all systems:
    - Retrieves the computer **SID** (`objectSid`) from Active Directory
    - Retrieves the device **SID** from SCCM (`SMS_R_System.SID`)
    - Compares AD SID ↔ SCCM SID to ensure the same physical device
    - If SIDs don't match, the cleanup is **blocked** with a `SidMismatch` result
-5. **Cleanup** — The SignalR hub sends commands to the on-prem agent:
-   - **Active Directory** → LDAP delete of the computer object (with SID validation)
-   - **SCCM** → AdminService REST API delete (with SID cross-check against AD)
-   - **Intune** → Graph API delete (directly from the cloud)
+6. **Cleanup** — The orchestrator executes 4 steps in sequence:
+   - **① Autopilot** → Graph API delete `windowsAutopilotDeviceIdentities` (cloud)
+   - **② Active Directory** → LDAP delete via on-prem Gateway Agent (SignalR)
+   - **③ SCCM** → AdminService REST delete via on-prem Gateway Agent (SignalR)
+   - **④ Intune** → Graph API delete `managedDevices` (cloud)
    - **Entra ID** → Automatically cleaned up after AD sync
-6. **Auditing** — Every action is tracked with custom Application Insights events, including matched SIDs for audit trail
+7. **Result Notification** — Teams card with cleanup result (✅ success / ❌ failure)
+8. **Auditing** — Every action is tracked with custom Application Insights events, including matched SIDs
 
 ## Projects
 
@@ -82,6 +75,7 @@ All cleanup operations emit structured custom events for auditing and monitoring
 |---|---|
 | `DeviceCleanup.Approved` | Operator approves a device cleanup |
 | `DeviceCleanup.Skipped` | Operator skips a device |
+| `DeviceCleanup.AutopilotDeletion` | Autopilot identity deletion attempted |
 | `DeviceCleanup.ADDeletion` | AD object deletion attempted (emitted by both cloud and agent) |
 | `DeviceCleanup.SCCMDeletion` | SCCM device deletion attempted (emitted by both cloud and agent) |
 | `DeviceCleanup.IntuneDeletion` | Intune device deletion attempted |
@@ -137,6 +131,19 @@ customEvents
     Error = tostring(customDimensions.ErrorMessage)
 ```
 
+## Teams Notifications
+
+When a wipe is completed and a device needs approval, an **Adaptive Card** is sent to a Microsoft Teams channel via Incoming Webhook:
+
+- 📢 **Approval request** — device name, owner, wipe date, "Open Approvals" button
+- ✅/❌ **Cleanup result** — device name, who approved, success or failure
+
+### Setup
+
+1. In Teams, create an **Incoming Webhook** in the desired channel (Settings → Connectors → Incoming Webhook)
+2. Set `WipeMonitor:TeamsWebhookUrl` in App Configuration or App Settings
+3. Optionally set `WipeMonitor:DashboardUrl` for the "Open Approvals" button link
+
 ## Logging — CMTrace Format
 
 Both the web app and the agent write log files in **CMTrace format** (`<![LOG[...]LOG]!>`), compatible with:
@@ -182,6 +189,8 @@ Logs are written to `logs/wipemonitor-web-YYYYMMDD.log` and `logs/wipemonitor-ag
 | `WipeMonitor:PollingIntervalMinutes` | Polling interval (default: 60) |
 | `WipeMonitor:RequireApproval` | Require manual approval (default: true) |
 | `WipeMonitor:CleanupIntune` | Also delete from Intune (default: true) |
+| `WipeMonitor:TeamsWebhookUrl` | Teams Incoming Webhook URL (optional) |
+| `WipeMonitor:DashboardUrl` | Dashboard URL for Teams card links |
 | `Graph:TenantId` | Azure AD tenant ID |
 | `Graph:ClientId` | App Registration client ID |
 | `Graph:ClientSecret` | Key Vault reference to the client secret |

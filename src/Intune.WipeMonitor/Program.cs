@@ -109,6 +109,8 @@ builder.Services.AddHttpClient<GraphWipeMonitorService>();
 builder.Services.AddScoped<GraphWipeMonitorService>();
 builder.Services.AddScoped<CleanupOrchestrator>();
 builder.Services.AddSingleton<CleanupTelemetryService>();
+builder.Services.AddHttpClient<TeamsNotificationService>();
+builder.Services.AddScoped<TeamsNotificationService>();
 
 // SignalR
 builder.Services.AddSignalR();

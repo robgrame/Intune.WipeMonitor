@@ -3,6 +3,7 @@ namespace Intune.WipeMonitor.Shared;
 /// <summary>Tipo di repository da cui rimuovere il device.</summary>
 public enum CleanupTarget
 {
+    Autopilot,
     ActiveDirectory,
     SCCM,
     Intune

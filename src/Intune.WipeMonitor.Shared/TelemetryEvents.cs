@@ -16,6 +16,9 @@ public static class TelemetryEvents
     /// <summary>Operatore ha saltato il cleanup di un device.</summary>
     public const string CleanupSkipped = "DeviceCleanup.Skipped";
 
+    /// <summary>Tentativo di cancellazione da Windows Autopilot.</summary>
+    public const string AutopilotDeletion = "DeviceCleanup.AutopilotDeletion";
+
     /// <summary>Tentativo di cancellazione da Active Directory.</summary>
     public const string ADDeletion = "DeviceCleanup.ADDeletion";
 

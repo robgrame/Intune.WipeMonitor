@@ -57,6 +57,12 @@ public class CleanupTelemetryService
         TrackDeletionStep(TelemetryEvents.SCCMDeletion, CleanupTarget.SCCM, record, result);
     }
 
+    /// <summary>Traccia il tentativo di cancellazione da Autopilot con esito.</summary>
+    public void TrackAutopilotDeletion(DeviceCleanupRecord record, CleanupStepResult result)
+    {
+        TrackDeletionStep(TelemetryEvents.AutopilotDeletion, CleanupTarget.Autopilot, record, result);
+    }
+
     /// <summary>Traccia il tentativo di cancellazione da Intune con esito.</summary>
     public void TrackIntuneDeletion(DeviceCleanupRecord record, CleanupStepResult result)
     {

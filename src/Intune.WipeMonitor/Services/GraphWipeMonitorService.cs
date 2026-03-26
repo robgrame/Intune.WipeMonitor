@@ -18,6 +18,7 @@ public class GraphWipeMonitorService
     private readonly HttpClient _httpClient;
     private readonly GraphSettings _settings;
     private readonly CleanupTelemetryService _telemetry;
+    private readonly TeamsNotificationService _teamsNotifier;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GraphWipeMonitorService> _logger;
 
@@ -28,12 +29,14 @@ public class GraphWipeMonitorService
         HttpClient httpClient,
         IOptions<GraphSettings> settings,
         CleanupTelemetryService telemetry,
+        TeamsNotificationService teamsNotifier,
         IServiceScopeFactory scopeFactory,
         ILogger<GraphWipeMonitorService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _telemetry = telemetry;
+        _teamsNotifier = teamsNotifier;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -138,7 +141,10 @@ public class GraphWipeMonitorService
                 newDevices++;
 
                 if (action.IsCompleted)
+                {
                     _telemetry.TrackWipeDetected(record);
+                    await _teamsNotifier.NotifyWipeCompletedAsync(record);
+                }
 
                 _logger.LogInformation(
                     "Nuovo device rilevato: {DeviceName} (Wipe: {State})",
@@ -157,6 +163,7 @@ public class GraphWipeMonitorService
                     existing.WipeCompletedAt = DateTimeOffset.UtcNow;
 
                     _telemetry.TrackWipeDetected(existing);
+                    await _teamsNotifier.NotifyWipeCompletedAsync(existing);
 
                     _logger.LogInformation(
                         "Wipe completato per {DeviceName} - pronto per approvazione cleanup",
@@ -206,6 +213,72 @@ public class GraphWipeMonitorService
         {
             _logger.LogError(ex, "Eccezione durante rimozione device {DeviceId} da Intune", managedDeviceId);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Cerca e rimuove il device da Windows Autopilot tramite Graph API.
+    /// GET  /beta/deviceManagement/windowsAutopilotDeviceIdentities?$filter=contains(displayName,'{name}')
+    /// DELETE /beta/deviceManagement/windowsAutopilotDeviceIdentities/{id}
+    /// </summary>
+    public async Task<(bool Success, bool NotFound)> DeleteAutopilotDeviceAsync(
+        string deviceName, string managedDeviceId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var token = await GetAccessTokenAsync(cancellationToken);
+            var headers = new AuthenticationHeaderValue("Bearer", token);
+
+            // Cerca per managedDeviceId (più preciso) o per displayName come fallback
+            var searchUrl = $"https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?" +
+                $"$filter=managedDeviceId eq '{managedDeviceId}'&$select=id,displayName,serialNumber,managedDeviceId";
+
+            using var searchRequest = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+            searchRequest.Headers.Authorization = headers;
+            using var searchResponse = await _httpClient.SendAsync(searchRequest, cancellationToken);
+            searchResponse.EnsureSuccessStatusCode();
+
+            var searchContent = await searchResponse.Content.ReadAsStringAsync(cancellationToken);
+            var searchResult = JsonSerializer.Deserialize<GraphApiResponse<JsonElement>>(searchContent);
+
+            if (searchResult?.Value is null || searchResult.Value.Count == 0)
+            {
+                _logger.LogInformation("Device {DeviceName} non trovato in Autopilot", deviceName);
+                return (true, true); // NotFound = successo
+            }
+
+            // Elimina ogni identità Autopilot trovata
+            foreach (var device in searchResult.Value)
+            {
+                var autopilotId = device.GetProperty("id").GetString();
+                var serial = device.TryGetProperty("serialNumber", out var sn) ? sn.GetString() : "N/A";
+
+                var deleteUrl = $"https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/{autopilotId}";
+                using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, deleteUrl);
+                deleteRequest.Headers.Authorization = headers;
+                using var deleteResponse = await _httpClient.SendAsync(deleteRequest, cancellationToken);
+
+                if (deleteResponse.IsSuccessStatusCode || deleteResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogInformation(
+                        "Device {DeviceName} (SN: {Serial}) rimosso da Autopilot (ID: {AutopilotId})",
+                        deviceName, serial, autopilotId);
+                }
+                else
+                {
+                    _logger.LogError(
+                        "Errore rimozione {DeviceName} da Autopilot: {StatusCode}",
+                        deviceName, deleteResponse.StatusCode);
+                    return (false, false);
+                }
+            }
+
+            return (true, false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Eccezione durante rimozione {DeviceName} da Autopilot", deviceName);
+            return (false, false);
         }
     }
 }

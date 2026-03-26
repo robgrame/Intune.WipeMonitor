@@ -18,6 +18,7 @@ public class CleanupOrchestrator
     private readonly IHubContext<CleanupHub> _hubContext;
     private readonly GraphWipeMonitorService _graphService;
     private readonly CleanupTelemetryService _telemetry;
+    private readonly TeamsNotificationService _teamsNotifier;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly WipeMonitorSettings _appSettings;
     private readonly ILogger<CleanupOrchestrator> _logger;
@@ -26,6 +27,7 @@ public class CleanupOrchestrator
         IHubContext<CleanupHub> hubContext,
         GraphWipeMonitorService graphService,
         CleanupTelemetryService telemetry,
+        TeamsNotificationService teamsNotifier,
         IServiceScopeFactory scopeFactory,
         IOptions<WipeMonitorSettings> appSettings,
         ILogger<CleanupOrchestrator> logger)
@@ -33,6 +35,7 @@ public class CleanupOrchestrator
         _hubContext = hubContext;
         _graphService = graphService;
         _telemetry = telemetry;
+        _teamsNotifier = teamsNotifier;
         _scopeFactory = scopeFactory;
         _appSettings = appSettings.Value;
         _logger = logger;
@@ -95,21 +98,32 @@ public class CleanupOrchestrator
 
         var allSuccess = true;
 
-        // Step 1: Active Directory (via agent on-prem)
+        // Step 1: Autopilot (direttamente via Graph API dal cloud — primo step)
+        var (autopilotOk, autopilotNotFound) = await _graphService.DeleteAutopilotDeviceAsync(
+            record.DeviceDisplayName, record.ManagedDeviceId, cancellationToken);
+        var autopilotResult = autopilotNotFound
+            ? CleanupStepResult.NotFound($"Device '{record.DeviceDisplayName}' non registrato in Autopilot")
+            : autopilotOk
+                ? CleanupStepResult.Success()
+                : CleanupStepResult.Failed("Errore durante la rimozione da Autopilot");
+        allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.Autopilot, autopilotResult, cancellationToken);
+        _telemetry.TrackAutopilotDeletion(record, autopilotResult);
+
+        // Step 2: Active Directory (via agent on-prem)
         var adResult = await InvokeAgentStepAsync(
             activeAgent.ConnectionId, CleanupTarget.ActiveDirectory,
             nameof(ICleanupAgentClient.RemoveFromActiveDirectory), command);
         allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.ActiveDirectory, adResult, cancellationToken);
         _telemetry.TrackADDeletion(record, adResult);
 
-        // Step 2: SCCM (via agent on-prem)
+        // Step 3: SCCM (via agent on-prem)
         var sccmResult = await InvokeAgentStepAsync(
             activeAgent.ConnectionId, CleanupTarget.SCCM,
             nameof(ICleanupAgentClient.RemoveFromSccm), command);
         allSuccess &= await PersistStepResultAsync(db, record, CleanupTarget.SCCM, sccmResult, cancellationToken);
         _telemetry.TrackSCCMDeletion(record, sccmResult);
 
-        // Step 3: Intune (direttamente via Graph API dal cloud)
+        // Step 4: Intune (direttamente via Graph API dal cloud — ultimo step)
         if (_appSettings.CleanupIntune)
         {
             var intuneSuccess = await _graphService.DeleteIntuneDeviceAsync(record.ManagedDeviceId, cancellationToken);
@@ -130,6 +144,8 @@ public class CleanupOrchestrator
             _telemetry.TrackCleanupCompleted(record);
         else
             _telemetry.TrackCleanupFailed(record);
+
+        await _teamsNotifier.NotifyCleanupCompletedAsync(record, allSuccess);
     }
 
     /// <summary>
