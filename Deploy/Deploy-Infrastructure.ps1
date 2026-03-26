@@ -161,10 +161,7 @@ az group create --name $ResourceGroup --location $Location -o none 2>$null
 Write-Host "[BICEP] Resource Group: $ResourceGroup" -ForegroundColor Green
 
 if (-not $SkipBicep) {
-    $bicepPath = Join-Path $PSScriptRoot "..\infra\main.bicep"
-    if (-not (Test-Path $bicepPath)) {
-        $bicepPath = Join-Path $PSScriptRoot "main.bicep"
-    }
+    $bicepPath = Join-Path $PSScriptRoot "main.bicep"
 
     Write-Host "[BICEP] Deploying $bicepPath ..." -ForegroundColor Yellow
     $deployment = az deployment group create `
